@@ -1,0 +1,64 @@
+from pathlib import Path
+import os
+import pandas as pd
+from glob import glob
+from itertools import product
+from snakemake.utils import validate, min_version
+
+
+##### load config and sample sheets #####
+configfile: "config/config.yml"
+
+
+SCRIPT_DIR = srcdir("scripts")
+sample_sheet = pd.read_csv(config["runs"], sep=",", comment="#").set_index(
+    "run_id", drop=True
+)
+
+##### set filenames #####
+OUTPUT_BASE = Path(config["OUTPUT_BASE"])
+
+
+##### read values from sample sheet ####
+RUN_IDS = sample_sheet.index
+
+
+###################
+# READ ADAPTER SCAN FILES
+###################
+COPIED_DIR = OUTPUT_BASE / "{run_id}" / "ingest"
+COPIED_FILES = str(COPIED_DIR / "{batch_id}.fastq.gz")
+ADAPTERS_DIR = OUTPUT_BASE / "{run_id}" / "adapters"
+READ_CONFIG_CHUNKED = str(ADAPTERS_DIR / "{batch_id}.stranded.adapters.tsv")
+STRANDED_FQ_CHUNKED = str(ADAPTERS_DIR / "{batch_id}.stranded.fastq")
+READ_CONFIG = str(ADAPTERS_DIR / "adapter_config.tsv")
+STRANDED_FQ = str(ADAPTERS_DIR / "stranded.fastq")
+CONFIG_STATS = str(ADAPTERS_DIR / "read_stats.json")
+
+
+###################
+# BARCODE DEMUX FILES
+###################
+DEMUX_DIR = OUTPUT_BASE / "{run_id}" / "barcodes"
+BARCODES = str(DEMUX_DIR / "bc_umi.fasta")
+BARCODES_HQ = str(DEMUX_DIR / "bc_umi.hq.fasta")
+BARCODES_CLUSTERS = str(DEMUX_DIR / "bc_clusters.fasta")
+BARCODES_WHITELIST = str(DEMUX_DIR / "bc_whitelist.tsv")
+BARCODES_KNEEPLOT = str(DEMUX_DIR / "bc_kneeplot.png")
+BARCODES_ASSIGNS = str(DEMUX_DIR / "bc_assigns.tsv")
+BARCODES_ASSIGNS_FILTERED = str(DEMUX_DIR / "bc_assigns.filtered.tsv")
+BARCODES_ASSIGNS_FILTERED_COUNTS = str(DEMUX_DIR / "bc_assigns.filtered.counts.tsv")
+
+
+##### include rules #####
+include: "rules/stranding.smk"
+include: "rules/barcodes.smk"
+
+
+##### target rules #####
+rule all:
+    input:
+        expand(READ_CONFIG, run_id=RUN_IDS),
+        expand(STRANDED_FQ, run_id=RUN_IDS),
+        expand(CONFIG_STATS, run_id=RUN_IDS),
+        expand(BARCODES_ASSIGNS_FILTERED_COUNTS, run_id=RUN_IDS),

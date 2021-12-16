@@ -1,0 +1,12 @@
+name: kneeplot
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - numpy
+  - biopython
+  - matplotlib
+  - scikit-learn
+  - seaborn
+  - pandas

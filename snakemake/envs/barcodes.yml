@@ -1,0 +1,14 @@
+name: barcodes
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - pandas
+  - tqdm
+  - numpy
+  - biopython
+  - seqkit
+  - editdistance
+  - parasail-python==1.2.3
+  - vsearch==2.15.1
