@@ -95,7 +95,6 @@ class Barcode:
         self.rlen = int(read_name.split(" ")[1].split("=")[1])
         self.read1_ed = int(read_name.split(" ")[2].split("=")[1])
         self.qscore = float(read_name.split(" ")[3].split("=")[1])
-        self.umi = read_name.split(" ")[4].split("=")[1]
 
     def calc_ed_with_whitelist(self, whitelist):
         """

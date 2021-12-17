@@ -15,7 +15,7 @@ rule extract_barcodes:
     conda:
         "../envs/barcodes.yml"
     shell:
-        "python {SCRIPT_DIR}/extract_barcode_umi.py "
+        "python {SCRIPT_DIR}/extract_barcode.py "
         "-t {threads} "
         "--read1_adapter {params.read1} "
         "--read1_suff_length {params.read1_suff_length} "

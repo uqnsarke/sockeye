@@ -29,30 +29,38 @@ RUN_IDS = sample_sheet.index
 COPIED_DIR = OUTPUT_BASE / "{run_id}" / "ingest"
 COPIED_FILES = str(COPIED_DIR / "{batch_id}.fastq.gz")
 ADAPTERS_DIR = OUTPUT_BASE / "{run_id}" / "adapters"
-READ_CONFIG_CHUNKED = str(ADAPTERS_DIR / "{batch_id}.stranded.adapters.tsv")
+READ_CONFIG_CHUNKED = str(ADAPTERS_DIR / "{batch_id}.configs.tsv")
 STRANDED_FQ_CHUNKED = str(ADAPTERS_DIR / "{batch_id}.stranded.fastq")
-READ_CONFIG = str(ADAPTERS_DIR / "adapter_config.tsv")
-STRANDED_FQ = str(ADAPTERS_DIR / "stranded.fastq")
-CONFIG_STATS = str(ADAPTERS_DIR / "read_stats.json")
+READ_CONFIG = str(ADAPTERS_DIR / "configs.tsv")
+STRANDED_FQ = str(ADAPTERS_DIR / "reads.stranded.fastq")
+CONFIG_STATS = str(ADAPTERS_DIR / "configs.stats.json")
 
 
 ###################
 # BARCODE DEMUX FILES
 ###################
 DEMUX_DIR = OUTPUT_BASE / "{run_id}" / "barcodes"
-BARCODES = str(DEMUX_DIR / "bc_umi.fasta")
-BARCODES_HQ = str(DEMUX_DIR / "bc_umi.hq.fasta")
-BARCODES_CLUSTERS = str(DEMUX_DIR / "bc_clusters.fasta")
-BARCODES_WHITELIST = str(DEMUX_DIR / "bc_whitelist.tsv")
-BARCODES_KNEEPLOT = str(DEMUX_DIR / "bc_kneeplot.png")
-BARCODES_ASSIGNS = str(DEMUX_DIR / "bc_assigns.tsv")
-BARCODES_ASSIGNS_FILTERED = str(DEMUX_DIR / "bc_assigns.filtered.tsv")
-BARCODES_ASSIGNS_FILTERED_COUNTS = str(DEMUX_DIR / "bc_assigns.filtered.counts.tsv")
+BARCODES = str(DEMUX_DIR / "uncorr.fasta")
+BARCODES_HQ = str(DEMUX_DIR / "uncorr.hq.fasta")
+BARCODES_CLUSTERS = str(DEMUX_DIR / "clusters.fasta")
+BARCODES_WHITELIST = str(DEMUX_DIR / "whitelist.tsv")
+BARCODES_KNEEPLOT = str(DEMUX_DIR / "kneeplot.png")
+BARCODES_ASSIGNS = str(DEMUX_DIR / "assigns.tsv")
+BARCODES_ASSIGNS_FILTERED = str(DEMUX_DIR / "assigns.filtered.tsv")
+BARCODES_ASSIGNS_FILTERED_COUNTS = str(DEMUX_DIR / "assigns.filtered.counts.tsv")
+
+
+###################
+# UMI DEMUX FILES
+###################
+UMI_DIR = OUTPUT_BASE / "{run_id}" / "umis"
+UMI_EXTRACTED_READS = str(UMI_DIR / "reads.bc.umi.fastq")
 
 
 ##### include rules #####
 include: "rules/stranding.smk"
 include: "rules/barcodes.smk"
+include: "rules/umis.smk"
 
 
 ##### target rules #####
@@ -62,3 +70,4 @@ rule all:
         expand(STRANDED_FQ, run_id=RUN_IDS),
         expand(CONFIG_STATS, run_id=RUN_IDS),
         expand(BARCODES_ASSIGNS_FILTERED_COUNTS, run_id=RUN_IDS),
+        expand(UMI_EXTRACTED_READS, run_id=RUN_IDS),

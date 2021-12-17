@@ -251,7 +251,7 @@ def align_adapter(tup):
     read_id = tup[0]
     seq = tup[1]
     rlen = tup[2]
-    qscore = tup[3]
+    qv = tup[3]
     # read_num = tup[4]
     args = tup[5]
 
@@ -259,14 +259,15 @@ def align_adapter(tup):
         fasta_entry = SeqRecord(
             Seq("SKIP"),
             id=read_id,
-            description="rlen=0 read1_ed=None target_qscore=0 umi=None",
+            description="rlen=0 read1_ed=None bc_qv=0 umi=None",
         )
         return fasta_entry
 
     matrix = update_matrix(args)
 
-    # Compile the full query sequence read1+bc+umi+polyT
+    # Use only the specified suffix length of the read1 adapter
     read1_probe_seq = args.read1_adapter[-args.read1_suff_length :]
+    # Compile the actual query sequence of <read1_suffix>NNN...NNN<TTTTT....>
     probe_seq = "{r}{bc}{umi}{pT}".format(
         r=read1_probe_seq,
         bc="N" * args.barcode_length,
@@ -291,9 +292,6 @@ def align_adapter(tup):
         barcode_only = alignment.traceback.query[
             bc_start : (bc_start + args.barcode_length)
         ]
-        umi_only = alignment.traceback.query[
-            (bc_start + args.barcode_length) : umi_end + 1
-        ]
     else:
         bc_start = 0
         umi_end = 0
@@ -301,21 +299,19 @@ def align_adapter(tup):
         read1_ed = len(read1_probe_seq)
         barcode_umi = ""
         barcode_only = ""
-        umi_only = ""
-
-    # window_qmean = np.mean(qscore)
 
     barcode_umi = barcode_umi.strip("-")
-    read_id = read_id.replace("_noStrand", "_^")
-    read_id = read_id.replace("_+", "_fwd")
-    read_id = read_id.replace("_-", "_rev")
+
+    # Require minimal read1 edit distance and require perfect barcode length
+    ##########################
+    # TO-DO: can we be more flexible about barcode length?
+    ##########################
     if (read1_ed <= args.max_read1_ed) and (
         len(barcode_only.strip("-")) == args.barcode_length
     ):
         start_idx = seq.find(barcode_umi)
-        bc_umi_qscores = qscore[start_idx : (start_idx + len(barcode_umi))]
-        bc_umi_qmean = np.mean(bc_umi_qscores)
-        # print(read_id, "read1_ed={}".format(read1_ed), "bc_umi_qmean={}".format(bc_umi_qmean))
+        bc_qv = qv[start_idx : (start_idx + args.barcode_length + 1)]
+        # print(read_id, "read1_ed={}".format(read1_ed), "bc_qmean={}".format(np.mean(bc_qv)))
         # print(alignment.traceback.ref)
         # print(alignment.traceback.comp)
         # print(alignment.traceback.query)
@@ -323,8 +319,8 @@ def align_adapter(tup):
         fasta_entry = SeqRecord(
             Seq(barcode_only),
             id=read_id,
-            description="rlen={} read1_ed={} target_qscore={:.1f} umi={}".format(
-                rlen, read1_ed, bc_umi_qmean, umi_only
+            description="rlen={} read1_ed={} bc_qv={:.1f}".format(
+                rlen, read1_ed, np.mean(bc_qv)
             ),
         )
     else:

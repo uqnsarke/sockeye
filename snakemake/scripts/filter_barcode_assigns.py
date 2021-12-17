@@ -84,15 +84,21 @@ def main(args):
         (df["match_ed"] <= args.max_ed)
         & (df["match_runner_up_diff"] >= args.min_ed_diff)
     ]
+
+    df = df.rename(
+        columns={"found_bc": "bc_uncorr", "match_bc": "bc_corr", "qscore": "bc_qv"}
+    )
     logger.info(f"Writing reads per barcode to {args.output_bc}")
-    df.to_csv(args.output_bc, sep="\t", index=False)
+    df[["read_id", "bc_corr", "bc_uncorr", "bc_qv"]].to_csv(
+        args.output_bc, sep="\t", index=False
+    )
 
     # Output file of read counts per barcode
     bc_read_counts = (
-        df.groupby("match_bc")[["read_id"]]
+        df.groupby("bc_corr")[["read_id"]]
         .agg("count")
         .reset_index()
-        .rename(columns={"match_bc": "barcode", "read_id": "reads"})
+        .rename(columns={"bc_corr": "barcode", "read_id": "reads"})
         .sort_values("reads", ascending=False)
     )
     logger.info(f"Writing reads per barcode to {args.output_counts}")
