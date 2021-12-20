@@ -216,12 +216,11 @@ def align_query(tup):
     """
     read_id = tup[0]
     read_seq = tup[1]
-    # rlen = tup[2]
-    read_qv = tup[3]
-    bc_corr = tup[4]
-    bc_uncorr = tup[5]
-    bc_qv = tup[6]
-    args = tup[7]
+    read_qv = tup[2]
+    bc_corr = tup[3]
+    bc_uncorr = tup[4]
+    bc_qv = tup[5]
+    args = tup[6]
 
     prefix_seq = read_seq[: args.window]
     prefix_qv = read_qv[: args.window]
@@ -280,7 +279,6 @@ def launch_alignment_pool(batch_reads, args):
             (
                 r.read_id,
                 r.seq,
-                len(r.seq),
                 list(map(lambda x: ord(x) - 33, r.qv)),
                 r.bc_corr,
                 r.bc_uncorr,

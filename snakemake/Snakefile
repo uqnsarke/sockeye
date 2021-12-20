@@ -1,4 +1,4 @@
-from pathlib import Path
+import pathlib
 import os
 import pandas as pd
 from glob import glob
@@ -16,7 +16,7 @@ sample_sheet = pd.read_csv(config["runs"], sep=",", comment="#").set_index(
 )
 
 ##### set filenames #####
-OUTPUT_BASE = Path(config["OUTPUT_BASE"])
+OUTPUT_BASE = pathlib.Path(config["OUTPUT_BASE"])
 
 
 ##### read values from sample sheet ####
@@ -57,10 +57,26 @@ UMI_DIR = OUTPUT_BASE / "{run_id}" / "umis"
 UMI_EXTRACTED_READS = str(UMI_DIR / "reads.bc.umi.fastq")
 
 
+###################
+# REF ALIGN FILES
+###################
+REF_10X_GENES_GTF = pathlib.Path(config["REF_GTF"])
+REF_10X_GENES_DIR = REF_10X_GENES_GTF.parents[0]
+REF_10X_GENES_BED = str(
+    REF_10X_GENES_DIR / f'{REF_10X_GENES_GTF.name.replace(".gtf", ".bed")}'
+)
+ALIGN_DIR = OUTPUT_BASE / "{run_id}" / "align"
+REF_CHROM_SIZES = str(ALIGN_DIR / "chrom_sizes.tsv")
+SAM_TMP = str(ALIGN_DIR / "tmp.sam")
+BAM_UNSORT_TMP = str(ALIGN_DIR / "tmp.unsort.bam")
+BAM_SORT = str(ALIGN_DIR / "sorted.bam")
+
+
 ##### include rules #####
 include: "rules/stranding.smk"
 include: "rules/barcodes.smk"
 include: "rules/umis.smk"
+include: "rules/align.smk"
 
 
 ##### target rules #####
@@ -71,3 +87,4 @@ rule all:
         expand(CONFIG_STATS, run_id=RUN_IDS),
         expand(BARCODES_ASSIGNS_FILTERED_COUNTS, run_id=RUN_IDS),
         expand(UMI_EXTRACTED_READS, run_id=RUN_IDS),
+        expand(BAM_SORT, run_id=RUN_IDS),
