@@ -1,8 +1,8 @@
 rule call_paftools:
     input:
-        gtf=str(REF_10X_GENES_GTF),
+        gtf=str(REF_GENES_GTF),
     output:
-        bed=REF_10X_GENES_BED,
+        bed=REF_GENES_BED,
     conda:
         "../envs/minimap2.yml"
     shell:
@@ -21,7 +21,7 @@ rule get_chrom_sizes:
 rule align_to_ref:
     input:
         fastq=STRANDED_FQ,
-        bed=REF_10X_GENES_BED,
+        bed=REF_GENES_BED,
         chrom_sizes=REF_CHROM_SIZES,
         sam_tmp=temp(SAM_TMP),
         unsort_bam=temp(BAM_UNSORT_TMP),
@@ -42,3 +42,17 @@ rule align_to_ref:
         "-t {input.chrom_sizes} -o {output.unsort_bam}; "
         "samtools sort {output.unsort_bam} -o {output.sort_bam}; "
         "samtools index {output.sort_bam}"
+
+
+rule add_cb_umi_tags_to_bam:
+    input:
+        bam=BAM_SORT,
+        fastq=UMI_EXTRACTED_READS,
+    output:
+        bam=TAGGED_BAM,
+    conda:
+        "../envs/samtools.yml"
+    shell:
+        "python {SCRIPT_DIR}/add_bc_umi_tags.py "
+        "--output {output.bam} "
+        "{input.bam} {input.fastq}"

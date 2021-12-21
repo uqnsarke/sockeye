@@ -60,16 +60,20 @@ UMI_EXTRACTED_READS = str(UMI_DIR / "reads.bc.umi.fastq")
 ###################
 # REF ALIGN FILES
 ###################
-REF_10X_GENES_GTF = pathlib.Path(config["REF_GTF"])
-REF_10X_GENES_DIR = REF_10X_GENES_GTF.parents[0]
-REF_10X_GENES_BED = str(
-    REF_10X_GENES_DIR / f'{REF_10X_GENES_GTF.name.replace(".gtf", ".bed")}'
-)
+REF_GENES_GTF = pathlib.Path(config["REF_GTF"])
+REF_GENES_DIR = REF_GENES_GTF.parents[0]
+REF_GENES_BED = str(REF_GENES_DIR / f'{REF_GENES_GTF.name.replace(".gtf", ".bed")}')
 ALIGN_DIR = OUTPUT_BASE / "{run_id}" / "align"
 REF_CHROM_SIZES = str(ALIGN_DIR / "chrom_sizes.tsv")
 SAM_TMP = str(ALIGN_DIR / "tmp.sam")
 BAM_UNSORT_TMP = str(ALIGN_DIR / "tmp.unsort.bam")
 BAM_SORT = str(ALIGN_DIR / "sorted.bam")
+
+
+###################
+# OUTPUT BAM FILES
+###################
+TAGGED_BAM = str(OUTPUT_BASE / "{run_id}" / "tagged.sorted.bam")
 
 
 ##### include rules #####
@@ -88,3 +92,4 @@ rule all:
         expand(BARCODES_ASSIGNS_FILTERED_COUNTS, run_id=RUN_IDS),
         expand(UMI_EXTRACTED_READS, run_id=RUN_IDS),
         expand(BAM_SORT, run_id=RUN_IDS),
+        expand(TAGGED_BAM, run_id=RUN_IDS),

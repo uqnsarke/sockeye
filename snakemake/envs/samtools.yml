@@ -1,0 +1,10 @@
+name: samtools
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - samtools
+  - pysam
+  - biopython
+  - tqdm
