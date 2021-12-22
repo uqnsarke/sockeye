@@ -89,6 +89,13 @@ FC_GENES = str(FC_DIR / "gene_assigned")
 FC_SUMMARY = str(FC_DIR / "gene_assigned.summary")
 
 
+###################
+# LIBRARY SATURATION FILES
+###################
+SAT_DIR = OUTPUT_BASE / "{run_id}" / "saturation"
+SAT_PLOT = str(SAT_DIR / "saturation_curves.png")
+
+
 ##### include rules #####
 include: "rules/stranding.smk"
 include: "rules/barcodes.smk"
@@ -107,3 +114,4 @@ rule all:
         expand(BAM_SORT, run_id=RUN_IDS),
         expand(FC_SUMMARY, run_id=RUN_IDS),
         expand(TAGGED_BAM, run_id=RUN_IDS),
+        expand(SAT_PLOT, run_id=RUN_IDS),

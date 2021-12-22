@@ -1,0 +1,12 @@
+name: plotting
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - pandas
+  - tqdm
+  - pysam
+  - samtools
+  - matplotlib
+  - seaborn

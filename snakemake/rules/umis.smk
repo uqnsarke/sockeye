@@ -38,3 +38,16 @@ rule cluster_umis:
         "python {SCRIPT_DIR}/cluster_umis.py "
         "--output {output.bam} {input.bam}; "
         "samtools index {output.bam} "
+
+
+rule umi_gene_saturation:
+    input:
+        bam=TAGGED_BAM,
+        bai=TAGGED_BAM_BAI,
+    output:
+        plot=SAT_PLOT,
+    conda:
+        "../envs/plotting.yml"
+    shell:
+        "python {SCRIPT_DIR}/saturation.py "
+        "--output {output.plot} {input.bam}"
