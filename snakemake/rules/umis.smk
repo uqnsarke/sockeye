@@ -23,3 +23,18 @@ rule extract_umis:
         "--umi_length {params.umi_length} "
         "--output {output} "
         "{input.fastq} {input.barcodes}"
+
+
+rule cluster_umis:
+    input:
+        bam=UMI_UNCORR_TAGGED_BAM,
+        bai=UMI_UNCORR_TAGGED_BAM_BAI,
+    output:
+        bam=TAGGED_BAM,
+        bai=TAGGED_BAM_BAI,
+    conda:
+        "../envs/umis.yml"
+    shell:
+        "python {SCRIPT_DIR}/cluster_umis.py "
+        "--output {output.bam} {input.bam}; "
+        "samtools index {output.bam} "

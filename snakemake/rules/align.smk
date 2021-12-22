@@ -20,12 +20,12 @@ rule get_chrom_sizes:
 
 rule align_to_ref:
     input:
-        fastq=STRANDED_FQ,
+        fastq=UMI_EXTRACTED_READS,
         bed=REF_GENES_BED,
         chrom_sizes=REF_CHROM_SIZES,
+    output:
         sam_tmp=temp(SAM_TMP),
         unsort_bam=temp(BAM_UNSORT_TMP),
-    output:
         sort_bam=BAM_SORT,
     params:
         ref=config["REF_GENOME_FASTA"],
@@ -42,17 +42,3 @@ rule align_to_ref:
         "-t {input.chrom_sizes} -o {output.unsort_bam}; "
         "samtools sort {output.unsort_bam} -o {output.sort_bam}; "
         "samtools index {output.sort_bam}"
-
-
-rule add_cb_umi_tags_to_bam:
-    input:
-        bam=BAM_SORT,
-        fastq=UMI_EXTRACTED_READS,
-    output:
-        bam=TAGGED_BAM,
-    conda:
-        "../envs/samtools.yml"
-    shell:
-        "python {SCRIPT_DIR}/add_bc_umi_tags.py "
-        "--output {output.bam} "
-        "{input.bam} {input.fastq}"

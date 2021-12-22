@@ -24,6 +24,8 @@ def parse_args():
         "fastq", help="FASTQ file of reads with tag values in read headers", type=str
     )
 
+    parser.add_argument("fc", help="FeatureCounts read/gene assignments file", type=str)
+
     # Optional arguments
     parser.add_argument(
         "--output",
@@ -84,6 +86,9 @@ class Read:
         # self.umi_corr = ###
         self.umi_qv = kv["umi_qv"]
 
+    def add_gene_info(self, gene):
+        self.gene = gene
+
 
 def count_fastq_reads(fastq):
     logger.info("Counting reads")
@@ -103,6 +108,9 @@ def open_fastq(fastq):
 
 
 def read_fastq(args):
+    """
+    Read cell barcode and UMI values from FASTQ read headers
+    """
     n_reads = int(count_fastq_reads(args.fastq))
     f = open_fastq(args.fastq)
     record_iter = FastqGeneralIterator(f)
@@ -113,6 +121,21 @@ def read_fastq(args):
         r = Read(read_id)
         r.add_barcode_info(read_name)
         read_tags[read_id] = r
+
+    return read_tags
+
+
+def read_fc(args, read_tags):
+    """
+    Read aligned gene names from featureCounts output file
+    """
+    for i, line in enumerate(open(args.fc, "r")):
+        read_id = line.strip().split("\t")[0]
+        gene = line.strip().split("\t")[3]
+
+        # Only some of the featureCounts reads will have barcodes / UMIs
+        if read_tags.get(read_id):
+            read_tags[read_id].add_gene_info(gene)
 
     return read_tags
 
@@ -142,6 +165,8 @@ def process_bam_entries(read_tags, args):
             align.set_tag("UR", read_tags[read_id].umi_uncorr, value_type="Z")
             # UMI quality score = UY:Z
             align.set_tag("UY", read_tags[read_id].umi_qv, value_type="Z")
+            # Annotated gene name = GN:Z
+            align.set_tag("GN", read_tags[read_id].gene, value_type="Z")
         else:
             # Corrected cell barcode = CB:Z
             align.set_tag("CB", "XXXXXXXXX", value_type="Z")
@@ -153,6 +178,8 @@ def process_bam_entries(read_tags, args):
             align.set_tag("UR", "XXXXXXXXX", value_type="Z")
             # UMI quality score = UY:Z
             align.set_tag("UY", "0.0", value_type="Z")
+            # Annotated gene name = GN:Z
+            align.set_tag("GN", "NA", value_type="Z")
 
         bam_tagged.write(align)
 
@@ -164,6 +191,8 @@ def main(args):
     init_logger(args)
 
     read_tags = read_fastq(args)
+
+    read_tags = read_fc(args, read_tags)
 
     process_bam_entries(read_tags, args)
 

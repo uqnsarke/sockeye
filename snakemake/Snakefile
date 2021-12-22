@@ -73,7 +73,20 @@ BAM_SORT = str(ALIGN_DIR / "sorted.bam")
 ###################
 # OUTPUT BAM FILES
 ###################
-TAGGED_BAM = str(OUTPUT_BASE / "{run_id}" / "tagged.sorted.bam")
+UMI_UNCORR_TAGGED_BAM = str(UMI_DIR / "umi_uncorr.sorted.bam")
+UMI_UNCORR_TAGGED_BAM_BAI = str(UMI_DIR / "umi_uncorr.sorted.bam.bai")
+TAGGED_BAM = str(UMI_DIR / "tagged.sorted.bam")
+TAGGED_BAM_BAI = str(UMI_DIR / "tagged.sorted.bam.bai")
+
+
+###################
+# FEATURECOUNTS FILES
+###################
+FC_DIR = OUTPUT_BASE / "{run_id}" / "features"
+FC_READ_ASSIGNS_TMP = str(FC_DIR / "sorted.bam.featureCounts")
+FC_READ_ASSIGNS = str(FC_DIR / "read.gene_assigns.tsv")
+FC_GENES = str(FC_DIR / "gene_assigned")
+FC_SUMMARY = str(FC_DIR / "gene_assigned.summary")
 
 
 ##### include rules #####
@@ -81,6 +94,7 @@ include: "rules/stranding.smk"
 include: "rules/barcodes.smk"
 include: "rules/umis.smk"
 include: "rules/align.smk"
+include: "rules/features.smk"
 
 
 ##### target rules #####
@@ -90,6 +104,6 @@ rule all:
         expand(STRANDED_FQ, run_id=RUN_IDS),
         expand(CONFIG_STATS, run_id=RUN_IDS),
         expand(BARCODES_ASSIGNS_FILTERED_COUNTS, run_id=RUN_IDS),
-        expand(UMI_EXTRACTED_READS, run_id=RUN_IDS),
         expand(BAM_SORT, run_id=RUN_IDS),
+        expand(FC_SUMMARY, run_id=RUN_IDS),
         expand(TAGGED_BAM, run_id=RUN_IDS),

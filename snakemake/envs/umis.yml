@@ -8,3 +8,5 @@ dependencies:
   - pysam
   - biopython
   - tqdm
+  - editdistance
+  - pandas
