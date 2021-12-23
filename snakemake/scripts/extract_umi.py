@@ -246,18 +246,23 @@ def align_query(tup):
     )
 
     idxs = list(find("N", alignment.traceback.ref))
-    umi_start = min(idxs)
-    umi_end = max(idxs)
-    umi = alignment.traceback.query[umi_start : umi_end + 1]
+    if len(idxs) > 0:
+        umi_start = min(idxs)
+        umi_end = max(idxs)
+        umi = alignment.traceback.query[umi_start : umi_end + 1]
 
-    umi = umi.strip("-")
-    start_idx = prefix_seq.find(umi)
-    umi_qv = prefix_qv[start_idx : (start_idx + len(umi))]
-    # print("{} bc_corr={} bc_uncorr={} bc_qv={:.1f} umi_uncorr={} umi_qv={:.1f}".format(read_id, bc_corr, bc_uncorr, bc_qv, umi, np.mean(umi_qv)))
-    # print(alignment.traceback.ref)
-    # print(alignment.traceback.comp)
-    # print(alignment.traceback.query)
-    # print()
+        umi = umi.strip("-")
+        start_idx = prefix_seq.find(umi)
+        umi_qv = prefix_qv[start_idx : (start_idx + len(umi))]
+        # print("{} bc_corr={} bc_uncorr={} bc_qv={:.1f} umi_uncorr={} umi_qv={:.1f}".format(read_id, bc_corr, bc_uncorr, bc_qv, umi, np.mean(umi_qv)))
+        # print(alignment.traceback.ref)
+        # print(alignment.traceback.comp)
+        # print(alignment.traceback.query)
+        # print()
+    else:
+        # No Ns in the alignment -- ignore
+        umi = "XXXXXXXXX"
+        umi_qv = 0.0
 
     fastq_entry = SeqRecord(
         Seq(read_seq),
