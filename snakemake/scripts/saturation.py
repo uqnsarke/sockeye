@@ -79,8 +79,9 @@ def plot_saturation_curves(res, args):
     fig = plt.figure(figsize=[10, 5])
 
     ax1 = fig.add_subplot(1, 2, 1)
-    sns.pointplot(x="reads_pc", y="genes_pc", data=res, ax=ax1, color="orange")
-
+    ax1.plot(res["reads_pc"], res["genes_pc"], marker="o", color="orange", linewidth=2)
+    ax1.set_xlim([0, ax1.get_xlim()[1]])
+    ax1.set_ylim([0, ax1.get_ylim()[1]])
     ax1.set_xlabel("Median reads per cell")
     ax1.set_ylabel("Genes per cell")
     ax1.set_title("Gene saturation")
@@ -100,8 +101,9 @@ def plot_saturation_curves(res, args):
     ax1.grid()
 
     ax2 = fig.add_subplot(1, 2, 2)
-    sns.pointplot(x="reads_pc", y="umis_pc", data=res, ax=ax2, color="purple")
-
+    ax2.plot(res["reads_pc"], res["umis_pc"], marker="o", color="purple", linewidth=2)
+    ax2.set_xlim([0, ax2.get_xlim()[1]])
+    ax2.set_ylim([0, ax2.get_ylim()[1]])
     ax2.set_xlabel("Median reads per cell")
     ax2.set_ylabel("UMIs per cell")
     ax2.set_title("UMI saturation")
