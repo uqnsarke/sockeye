@@ -10,6 +10,7 @@ import tempfile
 
 import editdistance as ed
 import pandas as pd
+from Bio import SeqIO
 from Bio.SeqIO.FastaIO import SimpleFastaParser
 from tqdm import tqdm
 
@@ -22,7 +23,9 @@ def parse_args():
 
     # Positional mandatory arguments
     parser.add_argument(
-        "fasta", help="FASTA file of putative barcode sequences", type=str
+        "fastq",
+        help="FASTQ file of reads with putative barcode sequences in header",
+        type=str,
     )
 
     parser.add_argument(
@@ -39,11 +42,36 @@ def parse_args():
     )
 
     parser.add_argument(
-        "-o",
-        "--output",
-        help="Output file [bc_assigns.tsv]",
+        "--output_all",
+        help="Output file containing all reads with unfiltered barcode assignments \
+        [reads.bc_corr.fastq]",
         type=str,
-        default="bc_assigns.tsv",
+        default="reads.bc_corr.fastq",
+    )
+
+    parser.add_argument(
+        "--output_filtered",
+        help="Output file containing only reads with high-confidence barcode \
+        assignments [reads.bc_corr.filt.fastq]",
+        type=str,
+        default="reads.bc_corr.filt.fastq",
+    )
+
+    parser.add_argument(
+        "--max_ed",
+        help="Max edit distance between putative barcode \
+                        and the matching whitelist barcode [2]",
+        type=int,
+        default=2,
+    )
+
+    parser.add_argument(
+        "--min_ed_diff",
+        help="Min difference in edit distance between the \
+                        (1) putative barcode vs top hit and (2) putative \
+                        barcode vs runner-up hit [2]",
+        type=int,
+        default=2,
     )
 
     parser.add_argument(
@@ -65,7 +93,7 @@ def parse_args():
     args = parser.parse_args()
 
     # Create temp dir and add that to the args object
-    p = pathlib.Path(args.output)
+    p = pathlib.Path(args.output_all)
     tempdir = tempfile.TemporaryDirectory(prefix="tmp.", dir=p.parents[0])
     args.tempdir = tempdir.name
 
@@ -85,16 +113,13 @@ def init_logger(args):
 
 
 class Barcode:
-    def __init__(self, read_name, found_bc):
+    def __init__(self, read_id, found_bc):
         """
         Define basic characteristic of the barcode that we
         want to classify
         """
+        self.read_id = read_id
         self.found_bc = found_bc
-        self.read_id = read_name.split(" ")[0]
-        self.rlen = int(read_name.split(" ")[1].split("=")[1])
-        self.read1_ed = int(read_name.split(" ")[2].split("=")[1])
-        self.qscore = float(read_name.split(" ")[3].split("=")[1])
 
     def calc_ed_with_whitelist(self, whitelist):
         """
@@ -120,21 +145,35 @@ def calc_ed(tup):
     Aligns a single adapter template to the read an computes the
     identity for the alignment
     """
-    read_name = tup[0]
-    seq = tup[1]
-    kmer_to_bc_index = tup[2]
-    whitelist = tup[3]
-    args = tup[4]
+    read = tup[0]
+    kmer_to_bc_index = tup[1]
+    whitelist = tup[2]
+    args = tup[3]
 
-    kmers = split_barcode_into_kmers(seq, args.k)
+    barcode = read.description.split(" ")[1].split("=")[-1]
+    bc_qv = read.description.split(" ")[2].split("=")[-1]
+
+    kmers = split_barcode_into_kmers(barcode, args.k)
     filt_whitelist = filter_whitelist_by_kmers(whitelist, kmers, kmer_to_bc_index)
-    # filt_whitelist = whitelist
 
     # Instantiate barcode object
-    ReadBC = Barcode(read_name, seq)
+    read_bc = Barcode(read.id, barcode)
     # Calc edit distances and store min & runner up
-    ReadBC.calc_ed_with_whitelist(filt_whitelist)
-    return ReadBC
+    read_bc.calc_ed_with_whitelist(filt_whitelist)
+
+    read.description = f"{read.id} bc_uncorr={barcode} bc_corr={read_bc.match_bc} bc_qv={bc_qv} ed={read_bc.match_ed} diff={read_bc.match_runner_up_diff}"
+
+    # Check barcode match edit distance and difference to runner-up edit distance
+    if (read_bc.match_ed <= args.max_ed) and (
+        read_bc.match_runner_up_diff >= args.min_ed_diff
+    ):
+        # This is a high-confidence barcode assignment
+        read.features.append({"hi-conf": True})
+    else:
+        # This is NOT a high-confidence barcode assignment
+        read.features.append({"hi-conf": False})
+
+    return read
 
 
 def launch_pool(procs, funct, args):
@@ -165,15 +204,15 @@ def filter_whitelist_by_kmers(wl, kmers, kmer_to_bc_index):
     return filt_wl
 
 
-def launch_alignment_pool(batch_barcodes, whitelist, kmer_to_bc_index, args):
+def launch_alignment_pool(batch_reads, whitelist, kmer_to_bc_index, args):
     func_args = []
 
-    for read_num, (read_name, barcode) in enumerate(batch_barcodes):
-        # filt_whitelist = whitelist
-        func_args.append((read_name, barcode, kmer_to_bc_index, whitelist, args))
+    for read in batch_reads:
+        # Read barcode from read header
+        func_args.append((read, kmer_to_bc_index, whitelist, args))
 
-    fasta_entries = launch_pool(args.threads, calc_ed, func_args)
-    return fasta_entries
+    reads = launch_pool(args.threads, calc_ed, func_args)
+    return reads
 
 
 def split_barcode_into_kmers(bc, k):
@@ -200,26 +239,24 @@ def load_whitelist(args):
                 kmer_to_bc_index[bc_kmer] = set([index])
             else:
                 kmer_to_bc_index[bc_kmer].add(index)
-    # for kmer,indexes in kmer_to_bc_index.items():
-    #     print(kmer, indexes)
     return wl, kmer_to_bc_index
 
 
-def open_fasta(fasta):
-    if fasta.split(".")[-1] == "gz":
-        f = gzip.open(fasta, "rt")
+def open_fastq(fastq):
+    if fastq.split(".")[-1] == "gz":
+        f = gzip.open(fastq, "rt")
     else:
-        f = open(fasta, "r+")
+        f = open(fastq, "r+")
     return f
 
 
-def check_input_format(fasta):
-    f = open_fasta(fasta)
+def check_input_format(fastq):
+    f = open_fastq(fastq)
     line = f.readline()
-    if line[0] == ">":
+    if line[0] == "@":
         pass
     else:
-        raise ("Unexpected file type! FASTA only!")
+        raise ("Unexpected file type! FASTQ only!")
     return
 
 
@@ -251,35 +288,48 @@ def batch_iterator(iterator, batch_size):
             yield batch
 
 
-def count_barcodes(fasta):
-    print("Counting putative barcodes")
+def count_barcodes(fastq):
+    logging.info("Counting putative barcodes")
     number_lines = 0
-    with open_fasta(fasta) as f:
+    with open_fastq(fastq) as f:
         for line in tqdm(f, unit_scale=0.5, unit=" barcodes"):
             number_lines += 1
-    return int(number_lines / 2)
+    return int(number_lines / 4)
 
 
-def write_tmp_table(barcodes):
-    tmp_table = tempfile.NamedTemporaryFile(
-        prefix="tmp.assigns.", suffix=".tsv", dir=args.tempdir, delete=False
+# def write_tmp_table(barcodes):
+#     tmp_table = tempfile.NamedTemporaryFile(
+#         prefix="tmp.assigns.", suffix=".tsv", dir=args.tempdir, delete=False
+#     )
+#     d = [vars(ReadBC) for ReadBC in barcodes]
+#
+#     df = pd.DataFrame.from_dict(d).set_index("read_id")
+#     df.to_csv(tmp_table.name, sep="\t", index=True)
+#     return tmp_table.name
+
+
+def write_tmp_fastq(fastq_entries, args):
+    tmp_read_fastq = tempfile.NamedTemporaryFile(
+        prefix="tmp.read.bc_corr.", suffix=".fastq", dir=args.tempdir, delete=False
     )
-    d = [vars(ReadBC) for ReadBC in barcodes]
-
-    df = pd.DataFrame.from_dict(d).set_index("read_id")
-    df.to_csv(tmp_table.name, sep="\t", index=True)
-    return tmp_table.name
+    tmp_filt_read_fastq = tempfile.NamedTemporaryFile(
+        prefix="tmp.read.bc_corr.filt.", suffix=".fastq", dir=args.tempdir, delete=False
+    )
+    fastq_filt_entries = [r for r in fastq_entries if r.features[0]["hi-conf"]]
+    SeqIO.write(fastq_entries, tmp_read_fastq.name, "fastq")
+    SeqIO.write(fastq_filt_entries, tmp_filt_read_fastq.name, "fastq")
+    return tmp_read_fastq.name, tmp_filt_read_fastq.name
 
 
 def main(args):
     init_logger(args)
     whitelist, kmer_to_bc_index = load_whitelist(args)
-    check_input_format(args.fasta)
-    n_barcodes = count_barcodes(args.fasta)
+    check_input_format(args.fastq)
+    n_barcodes = count_barcodes(args.fastq)
     n_batches = int(math.ceil(n_barcodes / args.batch_size))
 
-    f = open_fasta(args.fasta)
-    record_iter = SimpleFastaParser(f)
+    f = open_fastq(args.fastq)
+    record_iter = SeqIO.parse(f, "fastq")
 
     logger.info(
         "Processing {n} barcodes in {b} batches".format(n=n_barcodes, b=n_batches)
@@ -287,26 +337,34 @@ def main(args):
     if os.path.exists(args.tempdir):
         shutil.rmtree(args.tempdir)
     os.mkdir(args.tempdir)
-    tmp_tables = []
-    for i, batch_barcodes in enumerate(
+    tmp_fastqs = []
+    tmp_filt_fastqs = []
+    for i, batch_reads in enumerate(
         tqdm(batch_iterator(record_iter, args.batch_size), total=n_batches)
     ):
 
-        barcodes = launch_alignment_pool(
-            batch_barcodes, whitelist, kmer_to_bc_index, args
+        fastq_entries = launch_alignment_pool(
+            batch_reads, whitelist, kmer_to_bc_index, args
         )
-        tmp_table = write_tmp_table(barcodes)
-        tmp_tables.append(tmp_table)
+        tmp_fastq, tmp_filt_fastq = write_tmp_fastq(fastq_entries, args)
+        tmp_fastqs.append(tmp_fastq)
+        tmp_filt_fastqs.append(tmp_filt_fastq)
 
-    # Merge temp demux tables then clean up
-    demux_table_fn = args.output
-    logger.info(f"Writing read demux table to {demux_table_fn}")
-    df = pd.concat([pd.read_csv(fn, sep="\t") for fn in tmp_tables], axis=0)
-    df = df.drop(["runner_up_bc", "runner_up_ed"], axis=1)
-    df.to_csv(demux_table_fn, sep="\t", index=False)
+    logger.info(f"Writing all reads with bc_corr to {args.output_all}")
+    with open(args.output_all, "wb") as f_out:
+        for tmp_fastq in tmp_fastqs:
+            with open(tmp_fastq, "rb") as f_:
+                shutil.copyfileobj(f_, f_out)
+
+    logger.info(f"Writing filtered reads with bc_corr to {args.output_filtered}")
+    with open(args.output_filtered, "wb") as f_out:
+        for tmp_filt_fastq in tmp_filt_fastqs:
+            with open(tmp_filt_fastq, "rb") as f_:
+                shutil.copyfileobj(f_, f_out)
 
     logger.info("Cleaning up")
-    [os.remove(fn) for fn in tmp_tables]
+    [os.remove(fn) for fn in tmp_fastqs]
+    [os.remove(fn) for fn in tmp_filt_fastqs]
     shutil.rmtree(args.tempdir)
 
 

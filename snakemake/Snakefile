@@ -40,14 +40,13 @@ CONFIG_STATS = str(ADAPTERS_DIR / "configs.stats.json")
 # BARCODE DEMUX FILES
 ###################
 DEMUX_DIR = OUTPUT_BASE / "{run_id}" / "barcodes"
-BARCODES = str(DEMUX_DIR / "uncorr.fasta")
+BARCODES_UNCORR_READS = str(DEMUX_DIR / "reads.bc_uncorr.fastq")
 BARCODES_HQ = str(DEMUX_DIR / "uncorr.hq.fasta")
 BARCODES_CLUSTERS = str(DEMUX_DIR / "clusters.fasta")
 BARCODES_WHITELIST = str(DEMUX_DIR / "whitelist.tsv")
 BARCODES_KNEEPLOT = str(DEMUX_DIR / "kneeplot.png")
-BARCODES_ASSIGNS = str(DEMUX_DIR / "assigns.tsv")
-BARCODES_ASSIGNS_FILTERED = str(DEMUX_DIR / "assigns.filtered.tsv")
-BARCODES_ASSIGNS_FILTERED_COUNTS = str(DEMUX_DIR / "assigns.filtered.counts.tsv")
+BARCODES_CORR_READS = str(DEMUX_DIR / "reads.bc_corr.fastq")
+BARCODES_CORR_READS_FILTERED = str(DEMUX_DIR / "reads.bc_corr.filt.fastq")
 
 
 ###################
@@ -110,7 +109,7 @@ rule all:
         expand(READ_CONFIG, run_id=RUN_IDS),
         expand(STRANDED_FQ, run_id=RUN_IDS),
         expand(CONFIG_STATS, run_id=RUN_IDS),
-        expand(BARCODES_ASSIGNS_FILTERED_COUNTS, run_id=RUN_IDS),
+        expand(BARCODES_CORR_READS_FILTERED, run_id=RUN_IDS),
         expand(BAM_SORT, run_id=RUN_IDS),
         expand(FC_SUMMARY, run_id=RUN_IDS),
         expand(TAGGED_BAM, run_id=RUN_IDS),

@@ -2,7 +2,7 @@ rule extract_barcodes:
     input:
         STRANDED_FQ,
     output:
-        all=BARCODES,
+        fastq=BARCODES_UNCORR_READS,
         hq=BARCODES_HQ,
     params:
         read1=config["READ_STRUCTURE"]["READ1"],
@@ -23,14 +23,13 @@ rule extract_barcodes:
         "--barcode_length {params.barcode_length} "
         "--umi_length {params.umi_length} "
         "--bc_superlist {params.bc_superlist} "
-        "--output_bc {output.all} "
+        "--output_reads {output.fastq} "
         "--output_hq_bc {output.hq} "
         "{input}"
 
 
 rule cluster_hq_barcodes:
     input:
-        all=BARCODES,
         hq=BARCODES_HQ,
     output:
         BARCODES_CLUSTERS,
@@ -46,7 +45,7 @@ rule cluster_hq_barcodes:
         "--bc_len {params.bc_len} "
         "--min_id {params.min_id} "
         "-t {threads} "
-        "{input.all} {input.hq}"
+        "{input.hq}"
 
 
 rule generate_whitelist:
@@ -69,38 +68,24 @@ rule generate_whitelist:
 
 rule assign_barcodes:
     input:
-        barcodes=BARCODES,
+        fastq=BARCODES_UNCORR_READS,
         whitelist=BARCODES_WHITELIST,
     output:
-        BARCODES_ASSIGNS,
+        all=BARCODES_CORR_READS,
+        filtered=BARCODES_CORR_READS_FILTERED,
     params:
         batch_size=config["BARCODE"]["BATCH_SIZE"],
+        max_ed=config["BARCODE"]["MAX_ED"],
+        min_ed_diff=config["BARCODE"]["MIN_ED_DIFF"],
     threads: config["MAX_THREADS"]
     conda:
         "../envs/barcodes.yml"
     shell:
         "python {SCRIPT_DIR}/assign_barcodes.py "
         "-t {threads} "
-        "--output {output} "
+        "--output_all {output.all} "
+        "--output_filtered {output.filtered} "
         "--batch_size {params.batch_size} "
-        "{input.barcodes} {input.whitelist}"
-
-
-rule filter_barcode_assigns:
-    input:
-        BARCODES_ASSIGNS,
-    output:
-        bc=BARCODES_ASSIGNS_FILTERED,
-        counts=BARCODES_ASSIGNS_FILTERED_COUNTS,
-    params:
-        max_ed=config["BARCODE"]["MAX_ED"],
-        min_ed_diff=config["BARCODE"]["MIN_ED_DIFF"],
-    conda:
-        "../envs/barcodes.yml"
-    shell:
-        "python {SCRIPT_DIR}/filter_barcode_assigns.py "
         "--max_ed {params.max_ed} "
         "--min_ed_diff {params.min_ed_diff} "
-        "--output_bc {output.bc} "
-        "--output_counts {output.counts} "
-        "{input}"
+        "{input.fastq} {input.whitelist}"

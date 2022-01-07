@@ -130,17 +130,25 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--output_bc",
-        help="Output file containing barcode + UMI FASTA entries [bc_umi.fasta]",
+        "--output_reads",
+        help="Output FASTQ file containing stranded reads with uncorrected barcodes \
+        in the read header [reads.bc_uncorr.fastq]",
         type=str,
-        default="bc_umi.fasta",
+        default="reads.bc_uncorr.fastq",
     )
+
+    # parser.add_argument(
+    #     "--output_bc",
+    #     help="Output FASTA file containing barcode entries [bc_uncorr.fasta]",
+    #     type=str,
+    #     default="bc_uncorr.fasta",
+    # )
 
     parser.add_argument(
         "--output_hq_bc",
-        help="Output file containing high-quality barcode + UMI FASTA entries [bc_umi.hq.fasta]",
+        help="Output FASTA file containing high-quality barcode entries [bc_uncorr.hq.fasta]",
         type=str,
-        default="bc_umi.hq.fasta",
+        default="bc_uncorr.hq.fasta",
     )
 
     parser.add_argument(
@@ -162,7 +170,7 @@ def parse_args():
     args = parser.parse_args()
 
     # Create temp dir and add that to the args object
-    p = pathlib.Path(args.output_bc)
+    p = pathlib.Path(args.output_reads)
     tempdir = tempfile.TemporaryDirectory(prefix="tmp.", dir=p.parents[0])
     args.tempdir = tempdir.name
 
@@ -249,19 +257,31 @@ def align_adapter(tup):
     identity for the alignment
     """
     read_id = tup[0]
-    seq = tup[1]
-    rlen = tup[2]
-    qv = tup[3]
-    # read_num = tup[4]
-    args = tup[5]
+    read_seq = tup[1]
+    read_len = tup[2]
+    read_qv = tup[3]
+    args = tup[4]
 
-    def create_empty_fasta(read_id):
+    def create_fasta_entry(barcode_only, read_id, read_len, read1_ed, bc_qv):
         fasta_entry = SeqRecord(
-            Seq("SKIP"),
+            Seq(barcode_only),
             id=read_id,
-            description="rlen=0 read1_ed=None bc_qv=0 umi=None",
+            description="rlen={} read1_ed={} bc_qv={:.1f}".format(
+                read_len, read1_ed, np.mean(bc_qv)
+            ),
         )
         return fasta_entry
+
+    def create_fastq_entry(read_seq, read_id, barcode_only, bc_qv):
+        fastq_entry = SeqRecord(
+            Seq(read_seq),
+            id=read_id,
+            description="bc_uncorr={} bc_qv={:.1f}".format(
+                barcode_only, np.mean(bc_qv)
+            ),
+        )
+        fastq_entry.letter_annotations["phred_quality"] = read_qv
+        return fastq_entry
 
     matrix = update_matrix(args)
 
@@ -275,11 +295,15 @@ def align_adapter(tup):
         pT="T" * args.polyT_length,
     )
 
-    if len(seq) == 0:
-        return create_empty_fasta(read_id)
+    prefix_seq = read_seq[: args.window]
+    prefix_qv = read_qv[: args.window]
 
     alignment = parasail_alg(
-        s1=seq, s2=probe_seq, open=args.gap_open, extend=args.gap_extend, matrix=matrix
+        s1=prefix_seq,
+        s2=probe_seq,
+        open=args.gap_open,
+        extend=args.gap_extend,
+        matrix=matrix,
     )
 
     idxs = list(find("N", alignment.traceback.ref))
@@ -309,24 +333,24 @@ def align_adapter(tup):
     if (read1_ed <= args.max_read1_ed) and (
         len(barcode_only.strip("-")) == args.barcode_length
     ):
-        start_idx = seq.find(barcode_umi)
-        bc_qv = qv[start_idx : (start_idx + args.barcode_length + 1)]
+        start_idx = prefix_seq.find(barcode_umi)
+        bc_qv = prefix_qv[start_idx : (start_idx + args.barcode_length + 1)]
+
         # print(read_id, "read1_ed={}".format(read1_ed), "bc_qmean={}".format(np.mean(bc_qv)))
         # print(alignment.traceback.ref)
         # print(alignment.traceback.comp)
         # print(alignment.traceback.query)
         # print()
-        fasta_entry = SeqRecord(
-            Seq(barcode_only),
-            id=read_id,
-            description="rlen={} read1_ed={} bc_qv={:.1f}".format(
-                rlen, read1_ed, np.mean(bc_qv)
-            ),
-        )
-    else:
-        fasta_entry = create_empty_fasta(read_id)
 
-    return fasta_entry
+        fasta_entry = create_fasta_entry(
+            barcode_only, read_id, read_len, read1_ed, bc_qv
+        )
+        fastq_entry = create_fastq_entry(read_seq, read_id, barcode_only, bc_qv)
+    else:
+        fasta_entry = None
+        fastq_entry = None
+
+    return fasta_entry, fastq_entry
 
 
 def launch_alignment_pool(batch_reads, args):
@@ -334,19 +358,20 @@ def launch_alignment_pool(batch_reads, args):
 
     for read_num, (read_name, seq, qual) in enumerate(batch_reads):
         read_id = read_name.split(" ")[0]
-        func_args.append(
-            (
-                read_id,
-                seq[: args.window],
-                len(seq),
-                list(map(lambda x: ord(x) - 33, qual[: args.window])),
-                read_num,
-                args,
+        if len(seq) > 0:
+            func_args.append(
+                (
+                    read_id,
+                    seq,
+                    len(seq),
+                    list(map(lambda x: ord(x) - 33, qual)),
+                    args,
+                )
             )
-        )
 
-    fasta_entries = launch_pool(args.threads, align_adapter, func_args)
-    return fasta_entries
+    results = launch_pool(args.threads, align_adapter, func_args)
+    fasta_entries, fastq_entries = list(zip(*results))
+    return fasta_entries, fastq_entries
 
 
 def check_input_format(fastq):
@@ -427,12 +452,10 @@ def count_reads(fastq):
     return number_lines / 4
 
 
-def write_tmp_files(fasta_entries, wl, args):
+def write_tmp_files(fasta_entries, fastq_entries, wl, args):
     hq_fastas = []
-    all_fastas = []
     for fasta_entry in fasta_entries:
-        if fasta_entry.seq != "SKIP":
-            all_fastas.append(fasta_entry)
+        if fasta_entry is not None:
             if args.bc_superlist is not None:
                 if fasta_entry.seq in wl:
                     hq_fastas.append(fasta_entry)
@@ -440,12 +463,13 @@ def write_tmp_files(fasta_entries, wl, args):
     hq_tmp_fasta = tempfile.NamedTemporaryFile(
         prefix="tmp.hq.bc.", suffix=".fasta", dir=args.tempdir, delete=False
     )
-    all_tmp_fasta = tempfile.NamedTemporaryFile(
-        prefix="tmp.all.bc.", suffix=".fasta", dir=args.tempdir, delete=False
+    tmp_read_fastq = tempfile.NamedTemporaryFile(
+        prefix="tmp.read.bc_uncorr.", suffix=".fastq", dir=args.tempdir, delete=False
     )
     SeqIO.write(hq_fastas, hq_tmp_fasta.name, "fasta")
-    SeqIO.write(all_fastas, all_tmp_fasta.name, "fasta")
-    return hq_tmp_fasta.name, all_tmp_fasta.name
+    valid_fastq_entries = [entry for entry in fastq_entries if entry is not None]
+    SeqIO.write(valid_fastq_entries, tmp_read_fastq.name, "fastq")
+    return hq_tmp_fasta.name, tmp_read_fastq.name
 
 
 def main(args):
@@ -468,21 +492,25 @@ def main(args):
         shutil.rmtree(args.tempdir)
     os.mkdir(args.tempdir)
 
-    all_tmp_fastas = []
+    tmp_read_fastqs = []
     hq_tmp_fastas = []
     for i, batch_reads in enumerate(
         tqdm(batch_iterator(record_iter, args.batch_size), total=n_batches)
     ):
 
-        fasta_entries = launch_alignment_pool(batch_reads, args)
-        hq_tmp_fasta, all_tmp_fasta = write_tmp_files(fasta_entries, wl, args)
-        all_tmp_fastas.append(all_tmp_fasta)
+        fasta_entries, fastq_entries = launch_alignment_pool(batch_reads, args)
+        hq_tmp_fasta, tmp_read_fastq = write_tmp_files(
+            fasta_entries, fastq_entries, wl, args
+        )
+        tmp_read_fastqs.append(tmp_read_fastq)
         hq_tmp_fastas.append(hq_tmp_fasta)
 
-    logger.info(f"Writing all putative barcodes to {args.output_bc}")
-    with open(args.output_bc, "wb") as f_out:
-        for tmp_fasta in all_tmp_fastas:
-            with open(tmp_fasta, "rb") as f_:
+    logger.info(
+        f"Writing reads with putative barcodes in header to {args.output_reads}"
+    )
+    with open(args.output_reads, "wb") as f_out:
+        for tmp_fastq in tmp_read_fastqs:
+            with open(tmp_fastq, "rb") as f_:
                 shutil.copyfileobj(f_, f_out)
 
     logger.info(f"Writing superlist-filtered putative barcodes to {args.output_hq_bc}")
@@ -492,7 +520,7 @@ def main(args):
                 shutil.copyfileobj(f_, f_out)
 
     logger.info("Cleaning up")
-    [os.remove(fn) for fn in all_tmp_fastas]
+    [os.remove(fn) for fn in tmp_read_fastqs]
     [os.remove(fn) for fn in hq_tmp_fastas]
     shutil.rmtree(args.tempdir)
 

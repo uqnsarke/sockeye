@@ -5,6 +5,7 @@ import mmap
 import multiprocessing
 import os
 import pathlib
+import re
 import shutil
 import sys
 import tempfile
@@ -37,11 +38,10 @@ def parse_args():
 
     # Positional mandatory arguments
     parser.add_argument(
-        "fastq", help="Stranded sequencing reads (fastq or fasta)", type=str
-    )
-
-    parser.add_argument(
-        "barcodes", help="Table of filtered barcode assignments (tsv)", type=str
+        "fastq",
+        help="FASTQ of stranded sequencing reads containing bc_corr in the \
+                        read header",
+        type=str,
     )
 
     # Optional arguments
@@ -209,18 +209,30 @@ def find(target, myList):
             yield i
 
 
+def add_umi_to_header(fastq_entry, umi, umi_qv):
+    """
+    Accept an existing Seq entry and append the relevant UMI
+    info in the read header
+    """
+    fastq_entry.description += " umi_uncorr={} umi_qv={:.1f}".format(
+        umi, np.mean(umi_qv)
+    )
+    return fastq_entry
+
+
 def align_query(tup):
     """
     Aligns a single adapter template to the read an computes the
     identity for the alignment
     """
-    read_id = tup[0]
-    read_seq = tup[1]
-    read_qv = tup[2]
-    bc_corr = tup[3]
-    bc_uncorr = tup[4]
-    bc_qv = tup[5]
-    args = tup[6]
+    fastq_entry = tup[0]
+    args = tup[1]
+
+    read_seq = str(fastq_entry.seq)
+    read_qv = fastq_entry.letter_annotations["phred_quality"]
+    REGEX = r"bc_corr=([ACGT]{{{}}})".format(args.barcode_length)
+    m = re.search(REGEX, fastq_entry.description)
+    bc_corr = m.group(1)
 
     prefix_seq = read_seq[: args.window]
     prefix_qv = read_qv[: args.window]
@@ -254,7 +266,6 @@ def align_query(tup):
         umi = umi.strip("-")
         start_idx = prefix_seq.find(umi)
         umi_qv = prefix_qv[start_idx : (start_idx + len(umi))]
-        # print("{} bc_corr={} bc_uncorr={} bc_qv={:.1f} umi_uncorr={} umi_qv={:.1f}".format(read_id, bc_corr, bc_uncorr, bc_qv, umi, np.mean(umi_qv)))
         # print(alignment.traceback.ref)
         # print(alignment.traceback.comp)
         # print(alignment.traceback.query)
@@ -264,33 +275,17 @@ def align_query(tup):
         umi = "XXXXXXXXX"
         umi_qv = 0.0
 
-    fastq_entry = SeqRecord(
-        Seq(read_seq),
-        id=read_id,
-        description="bc_corr={} bc_uncorr={} bc_qv={:.1f} umi_uncorr={} umi_qv={:.1f}".format(
-            bc_corr, bc_uncorr, bc_qv, umi, np.mean(umi_qv)
-        ),
-    )
-    fastq_entry.letter_annotations["phred_quality"] = read_qv
+    fastq_entry = add_umi_to_header(fastq_entry, umi, umi_qv)
 
     return fastq_entry
 
 
-def launch_alignment_pool(batch_reads, args):
+def launch_alignment_pool(batch_entries, args):
     func_args = []
 
-    for r in batch_reads:
-        func_args.append(
-            (
-                r.read_id,
-                r.seq,
-                list(map(lambda x: ord(x) - 33, r.qv)),
-                r.bc_corr,
-                r.bc_uncorr,
-                r.bc_qv,
-                args,
-            )
-        )
+    for r in batch_entries:
+
+        func_args.append((r, args))
 
     read_entries = launch_pool(args.threads, align_query, func_args)
     return read_entries
@@ -360,37 +355,6 @@ def write_tmp_files(fastq_entries, args):
     return tmp_fastq_file.name
 
 
-class Read:
-    def __init__(self, read_id, seq, qv):
-        self.read_id = read_id
-        self.seq = seq
-        self.qv = qv
-
-    def add_barcode_info(self, bc_uncorr, bc_corr, bc_qv):
-        self.bc_uncorr = bc_uncorr
-        self.bc_corr = bc_corr
-        self.bc_qv = bc_qv
-
-
-def get_read_batch_barcodes(batch_entries, args):
-    # Load all assigned barcode information
-    df = pd.read_csv(args.barcodes, sep="\t").set_index("read_id")
-
-    batch_reads = []
-    # Create Read objects for just those reads in the batch
-    for (read_name, seq, qv) in batch_entries:
-        read_id = read_name.split(" ")[0]
-        r = Read(read_id, seq, qv)
-        if read_id in df.index:
-            r.add_barcode_info(
-                df.loc[read_id, "bc_uncorr"],
-                df.loc[read_id, "bc_corr"],
-                df.loc[read_id, "bc_qv"],
-            )
-            batch_reads.append(r)
-    return batch_reads
-
-
 def main(args):
     init_logger(args)
     check_input_format(args.fastq)
@@ -398,7 +362,8 @@ def main(args):
     n_batches = int(n_reads / args.batch_size)
 
     f = open_fastq(args.fastq)
-    record_iter = FastqGeneralIterator(f)
+    record_iter = SeqIO.parse(f, "fastq")
+    # record_iter = FastqGeneralIterator(f)
 
     logger.info("Processing {n} reads in {b} batches".format(n=n_reads, b=n_batches))
     if os.path.exists(args.tempdir):
@@ -410,8 +375,7 @@ def main(args):
         tqdm(batch_iterator(record_iter, args.batch_size), total=n_batches)
     ):
 
-        batch_reads = get_read_batch_barcodes(batch_entries, args)
-        read_entries = launch_alignment_pool(batch_reads, args)
+        read_entries = launch_alignment_pool(batch_entries, args)
         tmp_batch_files = write_tmp_files(read_entries, args)
         tmp_files.append(tmp_batch_files)
 

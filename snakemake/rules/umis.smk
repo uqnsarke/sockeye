@@ -1,7 +1,6 @@
 rule extract_umis:
     input:
-        fastq=STRANDED_FQ,
-        barcodes=BARCODES_ASSIGNS_FILTERED,
+        fastq=BARCODES_CORR_READS_FILTERED,
     output:
         UMI_EXTRACTED_READS,
     params:
@@ -22,7 +21,7 @@ rule extract_umis:
         "--barcode_length {params.barcode_length} "
         "--umi_length {params.umi_length} "
         "--output {output} "
-        "{input.fastq} {input.barcodes}"
+        "{input.fastq}"
 
 
 rule cluster_umis:

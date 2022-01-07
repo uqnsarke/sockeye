@@ -12,12 +12,12 @@ def parse_args():
     parser = argparse.ArgumentParser()
 
     # Positional mandatory arguments
-    parser.add_argument(
-        "bc_fasta",
-        help="FASTA containing all extracted barcodes to \
-                        cluster",
-        type=str,
-    )
+    # parser.add_argument(
+    #     "bc_fasta",
+    #     help="FASTA containing all extracted barcodes to \
+    #                     cluster",
+    #     type=str,
+    # )
 
     parser.add_argument(
         "hq_bc_fasta",
@@ -111,12 +111,12 @@ def main(args):
     init_logger(args)
     check_vsearch()
 
-    if os.path.getsize(args.hq_bc_fasta) != 0:
-        # We have high-quality barcodes to cluster
-        input_fasta = args.hq_bc_fasta
-    else:
-        # Just cluster all found barcodes
-        input_fasta = args.bc_fasta
+    # if os.path.getsize(args.hq_bc_fasta) != 0:
+    #     # We have high-quality barcodes to cluster
+    #     input_fasta = args.hq_bc_fasta
+    # else:
+    #     # Just cluster all found barcodes
+    input_fasta = args.hq_bc_fasta
 
     logger.info("Running VSEARCH clustering")
     vsearch_cmd = f"vsearch --clusterout_id --consout {args.output} \
