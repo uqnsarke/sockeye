@@ -137,13 +137,6 @@ def parse_args():
         default="reads.bc_uncorr.fastq",
     )
 
-    # parser.add_argument(
-    #     "--output_bc",
-    #     help="Output FASTA file containing barcode entries [bc_uncorr.fasta]",
-    #     type=str,
-    #     default="bc_uncorr.fasta",
-    # )
-
     parser.add_argument(
         "--output_hq_bc",
         help="Output FASTA file containing high-quality barcode entries [bc_uncorr.hq.fasta]",
@@ -242,46 +235,25 @@ def edit_distance(query, target):
     return ed.eval(query, target)
 
 
-# def create_matrix(matrix, symbols):
-#     parsail_matrix = parasail.matrix_create("".join(symbols), 2, -1)
-#     for ii, line in enumerate(matrix):
-#         for jj, element in enumerate(line):
-#             parsail_matrix[ii, jj] = element
-#
-#     return parsail_matrix
-
-
 def align_adapter(tup):
     """
     Aligns a single adapter template to the read an computes the
     identity for the alignment
     """
-    read_id = tup[0]
-    read_seq = tup[1]
-    read_len = tup[2]
-    read_qv = tup[3]
-    args = tup[4]
+    fastq_entry = tup[0]
+    args = tup[1]
 
-    def create_fasta_entry(barcode_only, read_id, read_len, read1_ed, bc_qv):
+    read_id = fastq_entry.id
+    read_seq = str(fastq_entry.seq)
+    read_qv = fastq_entry.letter_annotations["phred_quality"]
+
+    def create_fasta_entry(barcode_only, read_id, read1_ed, bc_qv):
         fasta_entry = SeqRecord(
             Seq(barcode_only),
             id=read_id,
-            description="rlen={} read1_ed={} bc_qv={:.1f}".format(
-                read_len, read1_ed, np.mean(bc_qv)
-            ),
+            description="read1_ed={} bc_qv={:.1f}".format(read1_ed, np.mean(bc_qv)),
         )
         return fasta_entry
-
-    def create_fastq_entry(read_seq, read_id, barcode_only, bc_qv):
-        fastq_entry = SeqRecord(
-            Seq(read_seq),
-            id=read_id,
-            description="bc_uncorr={} bc_qv={:.1f}".format(
-                barcode_only, np.mean(bc_qv)
-            ),
-        )
-        fastq_entry.letter_annotations["phred_quality"] = read_qv
-        return fastq_entry
 
     matrix = update_matrix(args)
 
@@ -306,20 +278,26 @@ def align_adapter(tup):
         matrix=matrix,
     )
 
+    # Find the position of the Ns in the alignment. These correspond
+    # to the cell barcode + UMI sequences bound by the read1 and polyT
     idxs = list(find("N", alignment.traceback.ref))
     if len(idxs) > 0:
+        # The Ns in the probe successfully aligned to sequence
         bc_start = min(idxs)
         umi_end = max(idxs)
+
+        # The read1 adapter comprises the first part of the alignment
         read1 = alignment.traceback.query[0:bc_start]
         read1_ed = edit_distance(read1, read1_probe_seq)
+
+        # The barcode + UMI sequences in the read correspond to the
+        # positions of the aligned Ns in the probe sequence
         barcode_umi = alignment.traceback.query[bc_start : umi_end + 1]
         barcode_only = alignment.traceback.query[
             bc_start : (bc_start + args.barcode_length)
         ]
     else:
-        bc_start = 0
-        umi_end = 0
-        read1 = ""
+        # No Ns in the probe successfully aligned -- ignore this read
         read1_ed = len(read1_probe_seq)
         barcode_umi = ""
         barcode_only = ""
@@ -327,25 +305,25 @@ def align_adapter(tup):
     barcode_umi = barcode_umi.strip("-")
 
     # Require minimal read1 edit distance and require perfect barcode length
+    condition1 = read1_ed <= args.max_read1_ed
     ##########################
     # TO-DO: can we be more flexible about barcode length?
     ##########################
-    if (read1_ed <= args.max_read1_ed) and (
-        len(barcode_only.strip("-")) == args.barcode_length
-    ):
+    condition2 = len(barcode_only.strip("-")) == args.barcode_length
+
+    if condition1 and condition2:
         start_idx = prefix_seq.find(barcode_umi)
         bc_qv = prefix_qv[start_idx : (start_idx + args.barcode_length + 1)]
 
-        # print(read_id, "read1_ed={}".format(read1_ed), "bc_qmean={}".format(np.mean(bc_qv)))
         # print(alignment.traceback.ref)
         # print(alignment.traceback.comp)
         # print(alignment.traceback.query)
         # print()
 
-        fasta_entry = create_fasta_entry(
-            barcode_only, read_id, read_len, read1_ed, bc_qv
+        fasta_entry = create_fasta_entry(barcode_only, read_id, read1_ed, bc_qv)
+        fastq_entry.description = "{} bc_uncorr={} bc_qv={:.2f}".format(
+            fastq_entry.id, barcode_only, np.mean(bc_qv)
         )
-        fastq_entry = create_fastq_entry(read_seq, read_id, barcode_only, bc_qv)
     else:
         fasta_entry = None
         fastq_entry = None
@@ -353,21 +331,12 @@ def align_adapter(tup):
     return fasta_entry, fastq_entry
 
 
-def launch_alignment_pool(batch_reads, args):
+def launch_alignment_pool(batch_entries, args):
     func_args = []
 
-    for read_num, (read_name, seq, qual) in enumerate(batch_reads):
-        read_id = read_name.split(" ")[0]
-        if len(seq) > 0:
-            func_args.append(
-                (
-                    read_id,
-                    seq,
-                    len(seq),
-                    list(map(lambda x: ord(x) - 33, qual)),
-                    args,
-                )
-            )
+    for r in batch_entries:
+        if len(str(r.seq)) > 0:
+            func_args.append((r, args))
 
     results = launch_pool(args.threads, align_adapter, func_args)
     fasta_entries, fastq_entries = list(zip(*results))
@@ -485,7 +454,7 @@ def main(args):
         wl = None
 
     f = open_fastq(args.fastq)
-    record_iter = FastqGeneralIterator(f)
+    record_iter = SeqIO.parse(f, "fastq")
 
     logger.info("Processing {n} reads in {b} batches".format(n=n_reads, b=n_batches))
     if os.path.exists(args.tempdir):
@@ -494,11 +463,11 @@ def main(args):
 
     tmp_read_fastqs = []
     hq_tmp_fastas = []
-    for i, batch_reads in enumerate(
+    for i, batch_entries in enumerate(
         tqdm(batch_iterator(record_iter, args.batch_size), total=n_batches)
     ):
 
-        fasta_entries, fastq_entries = launch_alignment_pool(batch_reads, args)
+        fasta_entries, fastq_entries = launch_alignment_pool(batch_entries, args)
         hq_tmp_fasta, tmp_read_fastq = write_tmp_files(
             fasta_entries, fastq_entries, wl, args
         )

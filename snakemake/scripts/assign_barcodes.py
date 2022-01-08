@@ -5,6 +5,7 @@ import math
 import multiprocessing
 import os
 import pathlib
+import re
 import shutil
 import tempfile
 
@@ -75,6 +76,10 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--barcode_length", help="Cell barcode length [16]", type=int, default=16
+    )
+
+    parser.add_argument(
         "-b",
         "--batch_size",
         help="Number of reads to load at once [20000]",
@@ -140,18 +145,28 @@ class Barcode:
         self.match_runner_up_diff = self.runner_up_ed - self.match_ed
 
 
+def get_val_from_read_header(REGEX, header):
+    """
+    Use regular expression to extract value from read header
+    """
+    m = re.search(REGEX, header)
+    return m.group(1)
+
+
 def calc_ed(tup):
     """
-    Aligns a single adapter template to the read an computes the
-    identity for the alignment
+    Filter the whitelist by kmers and find least edit distance match
     """
     read = tup[0]
     kmer_to_bc_index = tup[1]
     whitelist = tup[2]
     args = tup[3]
 
-    barcode = read.description.split(" ")[1].split("=")[-1]
-    bc_qv = read.description.split(" ")[2].split("=")[-1]
+    REGEX_bc_uncorr = r"bc_uncorr=([ACGT]{{{}}})".format(args.barcode_length)
+    barcode = get_val_from_read_header(REGEX_bc_uncorr, read.description)
+
+    REGEX_bc_qv = r"bc_qv=(\d+\.\d+)"
+    bc_qv = get_val_from_read_header(REGEX_bc_qv, read.description)
 
     kmers = split_barcode_into_kmers(barcode, args.k)
     filt_whitelist = filter_whitelist_by_kmers(whitelist, kmers, kmer_to_bc_index)
@@ -161,7 +176,13 @@ def calc_ed(tup):
     # Calc edit distances and store min & runner up
     read_bc.calc_ed_with_whitelist(filt_whitelist)
 
-    read.description = f"{read.id} bc_uncorr={barcode} bc_corr={read_bc.match_bc} bc_qv={bc_qv} ed={read_bc.match_ed} diff={read_bc.match_runner_up_diff}"
+    # Construct the updated read header
+    read.description = f"{read.id}"
+    read.description += f" bc_uncorr={barcode}"
+    read.description += f" bc_corr={read_bc.match_bc}"
+    read.description += f" bc_qv={bc_qv}"
+    read.description += f" ed={read_bc.match_ed}"
+    read.description += f" diff={read_bc.match_runner_up_diff}"
 
     # Check barcode match edit distance and difference to runner-up edit distance
     if (read_bc.match_ed <= args.max_ed) and (
@@ -295,17 +316,6 @@ def count_barcodes(fastq):
         for line in tqdm(f, unit_scale=0.5, unit=" barcodes"):
             number_lines += 1
     return int(number_lines / 4)
-
-
-# def write_tmp_table(barcodes):
-#     tmp_table = tempfile.NamedTemporaryFile(
-#         prefix="tmp.assigns.", suffix=".tsv", dir=args.tempdir, delete=False
-#     )
-#     d = [vars(ReadBC) for ReadBC in barcodes]
-#
-#     df = pd.DataFrame.from_dict(d).set_index("read_id")
-#     df.to_csv(tmp_table.name, sep="\t", index=True)
-#     return tmp_table.name
 
 
 def write_tmp_fastq(fastq_entries, args):
