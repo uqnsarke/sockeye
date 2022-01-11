@@ -126,11 +126,23 @@ def read_fastq(args):
     return read_tags
 
 
+def count_featureCounts_entries(fc):
+    """
+    Call `wc -l <FC> | awk '{print $1}'` to get number of entries
+    """
+    stdout, stderr = run_subprocess(f"wc -l {fc} | awk '{{print $1}}'")
+    n_reads = int(stdout)
+    return n_reads
+
+
 def read_fc(args, read_tags):
     """
     Read aligned gene names from featureCounts output file
     """
-    for i, line in enumerate(open(args.fc, "r")):
+    logging.info(f"Reading aligned gene names from {args.fc}")
+    n_reads = count_featureCounts_entries(args.fc)
+
+    for line in tqdm(open(args.fc, "r"), total=n_reads):
         read_id = line.strip().split("\t")[0]
         gene = line.strip().split("\t")[3]
 
