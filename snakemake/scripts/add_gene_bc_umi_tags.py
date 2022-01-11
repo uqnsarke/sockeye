@@ -6,6 +6,7 @@ import pathlib
 import subprocess
 import sys
 
+import numpy as np
 import pysam
 from Bio.SeqIO.QualityIO import FastqGeneralIterator
 from tqdm import tqdm
@@ -140,11 +141,19 @@ def read_fc(args, read_tags):
     return read_tags
 
 
+def count_bam_entries(bam):
+    """
+    Call `samtools idxstat <BAM> | cut -f3` to get number of alignments
+    """
+    stdout, stderr = run_subprocess(f"samtools idxstats {bam} | cut -f3")
+    n_aligns = np.sum([int(x) for x in stdout.split("\n") if x != ""])
+    return n_aligns
+
+
 def process_bam_entries(read_tags, args):
     """ """
     logger.info(f"Counting alignments in {args.bam}")
-    stdout, stderr = run_subprocess(f"samtools view -c -F 260 {args.bam}")
-    n_aligns = int(stdout.strip())
+    n_aligns = count_bam_entries(args.bam)
 
     bam = pysam.AlignmentFile(args.bam, "rb")
     bam_tagged = pysam.AlignmentFile(args.output, "wb", template=bam)

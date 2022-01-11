@@ -4,6 +4,7 @@ import os
 import subprocess
 import sys
 
+import numpy as np
 import pandas as pd
 import pysam
 import seaborn as sns
@@ -156,12 +157,13 @@ def load_bam_entries(n_aligns, args):
     return df, n_barcodes
 
 
-def count_bam_entries(args):
+def count_bam_entries(bam):
     """
-    Call `samtools view -c -F 260 <BAM>` to get number of entries
+    Call `samtools idxstat <BAM> | cut -f3` to get number of alignments
     """
-    stdout, stderr = run_subprocess(f"samtools view -c -F 260 {args.bam}")
-    return int(stdout.strip())
+    stdout, stderr = run_subprocess(f"samtools idxstats {bam} | cut -f3")
+    n_aligns = np.sum([int(x) for x in stdout.split("\n") if x != ""])
+    return n_aligns
 
 
 def downsample_reads(df, n_aligns):
@@ -209,7 +211,7 @@ def main(args):
     init_logger(args)
 
     logger.info(f"Counting alignments in {args.bam}")
-    n_aligns = count_bam_entries(args)
+    n_aligns = count_bam_entries(args.bam)
 
     logger.info(f"Reading read_ids, genes, barcodes, and UMIs from {args.bam}")
     df, n_barcodes = load_bam_entries(n_aligns, args)

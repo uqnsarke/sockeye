@@ -3,6 +3,7 @@ import itertools
 import logging
 import subprocess
 
+import numpy as np
 import pandas as pd
 import pysam
 from editdistance import eval as edit_distance
@@ -192,13 +193,21 @@ def add_umi_corr_tag(umis, n_aligns, args):
     bam_tagged.close()
 
 
+def count_bam_entries(bam):
+    """
+    Call `samtools idxstat <BAM> | cut -f3` to get number of alignments
+    """
+    stdout, stderr = run_subprocess(f"samtools idxstats {bam} | cut -f3")
+    n_aligns = np.sum([int(x) for x in stdout.split("\n") if x != ""])
+    return n_aligns
+
+
 def read_bam(args):
     """
     Read gene, cell barcode and UMI values from BAM entries
     """
     logger.info(f"Counting alignments in {args.bam}")
-    stdout, stderr = run_subprocess(f"samtools view -c -F 260 {args.bam}")
-    n_aligns = int(stdout.strip())
+    n_aligns = count_bam_entries(args.bam)
 
     bam = pysam.AlignmentFile(args.bam, "rb")
 
