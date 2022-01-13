@@ -164,7 +164,6 @@ def count_bam_entries(bam):
 
 def process_bam_entries(read_tags, args):
     """ """
-    logger.info(f"Counting alignments in {args.bam}")
     n_aligns = count_bam_entries(args.bam)
 
     bam = pysam.AlignmentFile(args.bam, "rb")

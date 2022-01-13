@@ -11,40 +11,50 @@ import tempfile
 
 import editdistance as ed
 import numpy as np
+import parasail
 from Bio import SeqIO
 from Bio.Seq import Seq
-from Bio.SeqIO.QualityIO import FastqGeneralIterator
 from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
 
-try:
-    import parasail
-except ImportError:
-    logging.error(
-        "Could not load parasail library. Please try reinstalling "
-        "parasail using pip."
-    )
-    sys.exit(1)
-
-parasail_alg = parasail.sw_trace
-
+# Make logger globally accessible to all functions
 logger = logging.getLogger(__name__)
 
 
 def parse_args():
+    """
+    Parse the command line arguments
+
+    :return args: object containing all supplied arguments
+    :rtype args: class argparse.Namespace
+    """
     # Create argument parser
     parser = argparse.ArgumentParser()
 
     # Positional mandatory arguments
     parser.add_argument(
-        "fastq", help="Stranded sequencing reads (fastq or fasta)", type=str
+        "fastq",
+        help="FASTQ file of stranded sequencing reads (gzipped ending in *.fastq.gz \
+        or *.fq.gz supported)",
+        type=str,
+    )
+
+    parser.add_argument(
+        "superlist",
+        help="Comprehensive whitelist of all possible cell barcodes. For example, \
+        the file 3M-february-2018.txt.gz can be downloaded at https://github.com/\
+        10XGenomics/cellranger/blob/master/lib/python/cellranger/barcodes/translation\
+        /3M-february-2018.txt.gz",
+        type=str,
+        default=None,
     )
 
     # Optional arguments
     parser.add_argument(
         "-r",
         "--read1_adapter",
-        help="Read1 adapter sequence to use in the alignment query [CTACACGACGCTCTTCCGATCT]",
+        help="Read1 adapter sequence to use in the alignment query \
+            [CTACACGACGCTCTTCCGATCT]",
         default="CTACACGACGCTCTTCCGATCT",
         type=str,
     )
@@ -52,10 +62,10 @@ def parse_args():
     parser.add_argument(
         "--read1_suff_length",
         help="Use this many suffix bases from read1 sequence \
-                        in the alignment query. For example, specifying 12 \
-                        would mean that the last 12 bases of the specified \
-                        read1 sequence will be included in the probe sequence \
-                        [10]",
+            in the alignment query. For example, specifying 12 \
+            would mean that the last 12 bases of the specified \
+            read1 sequence will be included in the probe sequence \
+            [10]",
         default=10,
         type=int,
     )
@@ -69,23 +79,25 @@ def parse_args():
     )
 
     parser.add_argument(
-        "-t", "--threads", help="Threads to use [4]", type=int, default=4
+        "-t",
+        "--threads",
+        help="Threads to use [4]",
+        type=int,
+        default=4,
     )
 
     parser.add_argument(
-        "--barcode_length", help="Cell barcode length [16]", type=int, default=16
+        "--barcode_length",
+        help="Cell barcode length [16]",
+        type=int,
+        default=16,
     )
 
-    parser.add_argument("--umi_length", help="UMI length [10]", type=int, default=10)
-
     parser.add_argument(
-        "--bc_superlist",
-        help="If specified, also outputs barcodes that are in \
-                        the supplied barcode superlist. This option will \
-                        write bc_umi sequences to the output file \
-                        specified by --output_hq_bc [None]",
-        type=str,
-        default=None,
+        "--umi_length",
+        help="UMI length [10]",
+        type=int,
+        default=10,
     )
 
     parser.add_argument(
@@ -124,7 +136,8 @@ def parse_args():
 
     parser.add_argument(
         "--max_read1_ed",
-        help="Max edit distance with read1 adapter sequence (upstream of cell barcode) [3]",
+        help="Max edit distance with read1 adapter sequence (upstream of cell \
+        barcode) [3]",
         type=int,
         default=3,
     )
@@ -139,7 +152,8 @@ def parse_args():
 
     parser.add_argument(
         "--output_hq_bc",
-        help="Output FASTA file containing high-quality barcode entries [bc_uncorr.hq.fasta]",
+        help="Output FASTA file containing high-quality barcode entries \
+        [bc_uncorr.hq.fasta]",
         type=str,
         default="bc_uncorr.hq.fasta",
     )
@@ -164,16 +178,20 @@ def parse_args():
 
     # Create temp dir and add that to the args object
     p = pathlib.Path(args.output_reads)
-    tempdir = tempfile.TemporaryDirectory(prefix="tmp.", dir=p.parents[0])
+    output_dir = p.parents[0]
+    tempdir = tempfile.TemporaryDirectory(prefix="tmp.", dir=output_dir)
     args.tempdir = tempdir.name
-
-    if args.bc_superlist == "None":
-        args.bc_superlist = None
 
     return args
 
 
 def init_logger(args):
+    """
+    Initialize the logger using the specified verbosity level.
+
+    :param args: object containing all supplied arguments
+    :type args: class argparse.Namespace
+    """
     logging.basicConfig(
         format="%(asctime)s -- %(message)s", datefmt="%Y-%m-%d %H:%M:%S"
     )
@@ -186,8 +204,11 @@ def update_matrix(args):
     """
     Create new parasail scoring matrix. 'N' is used as wildcard character
     for barcodes and has its own match parameter (0 per default).
-    :return: args: arguments
-    :rtype args, args
+
+    :param args: object containing all supplied arguments
+    :type args: class argparse.Namespace
+    :return: matrix: custom parasail alignment matrix
+    :rtype matrix: parasail.bindings_v2.Matrix
     """
     matrix = parasail.matrix_create("ACGTN", args.match, args.mismatch)
 
@@ -202,7 +223,6 @@ def update_matrix(args):
     # N   24  25  26  27  28  29
 
     # Update scoring matrix so that N matches A/C/G/N
-    # pointers = [4, 9, 14, 20, 21, 22, 24]
     pointers = [4, 10, 16, 24, 25, 26]
     for i in pointers:
         matrix.pointer[0].matrix[i] = args.acg_to_n_match
@@ -214,10 +234,23 @@ def update_matrix(args):
     return matrix
 
 
-def launch_pool(procs, funct, args):
+def launch_pool(func, func_args, procs=1):
+    """
+    Use multiprocessing library to create pool and map function calls to
+    that pool
+
+    :param procs: Number of processes to use for pool
+    :type procs: int, optional
+    :param func: Function to exececute in the pool
+    :type func: function
+    :param func_args: List containing arguments for each call to function <funct>
+    :type func_args: list
+    :return results: List of results returned by each call to function <funct>
+    :rtype results: list
+    """
     p = multiprocessing.Pool(processes=procs)
     try:
-        results = p.map(funct, args)
+        results = p.map(func, func_args)
         p.close()
         p.join()
     except KeyboardInterrupt:
@@ -225,20 +258,52 @@ def launch_pool(procs, funct, args):
     return results
 
 
-def find(target, myList):
-    for i in range(len(myList)):
-        if myList[i] == target:
+def find(char, string):
+    """
+    Return iterator of indices for positions in a string
+    corresponding to a target character
+
+    :param char: Target character whose positions you want to locate in the string
+    :type char: str
+    :param string: String to search for the target character positions
+    :type string: str
+    :return i: Indices in the string corresponding to the target character
+    :rtype i: iterator
+    """
+    for i in range(len(string)):
+        if string[i] == char:
             yield i
 
 
 def edit_distance(query, target):
-    return ed.eval(query, target)
+    """
+    Return Levenshtein distance between the two supplied strings
+
+    :param query: Query string to compare against the target
+    :type query: str
+    :param target: Target string to compare against the query
+    :type target: str
+    :return d: Calculated Levenshtein distance between query and target
+    :rtype d: int
+    """
+    d = ed.eval(query, target)
+    return d
 
 
 def align_adapter(tup):
     """
     Aligns a single adapter template to the read an computes the
     identity for the alignment
+
+    :param tup: Tuple containing the function arguments
+    :type tup: tup
+    :return fasta_entry: Biopython FASTA Seq record containing identified (uncorrected)
+        cell barcode sequence
+    :rtype fasta_entry: class 'Bio.SeqRecord.SeqRecord'
+    :return fastq_entry: Biopython FASTQ Seq record containing the read with the
+        identified cell barcode (bc_uncorr) and barcode mean quality value (bc_qv)
+        added to the read header
+    :rtype fastq_entry: class 'Bio.SeqRecord.SeqRecord'
     """
     fastq_entry = tup[0]
     args = tup[1]
@@ -247,9 +312,26 @@ def align_adapter(tup):
     read_seq = str(fastq_entry.seq)
     read_qv = fastq_entry.letter_annotations["phred_quality"]
 
-    def create_fasta_entry(barcode_only, read_id, read1_ed, bc_qv):
+    def create_fasta_entry(barcode, read_id, read1_ed, bc_qv):
+        """
+        Create a Biopython FASTA SeqRecord using the supplied sequence info
+
+        :param barcode: Nucleotide sequence of the identified (uncorrected) cell barcode
+        :type barcode: str
+        :param read_id: Read ID
+        :type read_id: str
+        :param read1_ed: Levenshtein distance between expected and observed read1
+            adapter sequence
+        :type read1_ed: int
+        :param bc_qv: Mean quality value for positions corresponding to the identified
+            cell barcode
+        :type bc_qv: float
+        :return fasta_entry: Biopython FASTA Seq record containing the identified
+            (uncorrected) cell barcode sequence
+        :rtype fasta_entry: class 'Bio.SeqRecord.SeqRecord'
+        """
         fasta_entry = SeqRecord(
-            Seq(barcode_only),
+            Seq(barcode),
             id=read_id,
             description="read1_ed={} bc_qv={:.1f}".format(read1_ed, np.mean(bc_qv)),
         )
@@ -269,6 +351,8 @@ def align_adapter(tup):
 
     prefix_seq = read_seq[: args.window]
     prefix_qv = read_qv[: args.window]
+
+    parasail_alg = parasail.sw_trace
 
     alignment = parasail_alg(
         s1=prefix_seq,
@@ -315,10 +399,11 @@ def align_adapter(tup):
         start_idx = prefix_seq.find(barcode_umi)
         bc_qv = prefix_qv[start_idx : (start_idx + args.barcode_length + 1)]
 
-        # print(alignment.traceback.ref)
-        # print(alignment.traceback.comp)
-        # print(alignment.traceback.query)
-        # print()
+        print(read_id)
+        print(alignment.traceback.ref)
+        print(alignment.traceback.comp)
+        print(alignment.traceback.query)
+        print()
 
         fasta_entry = create_fasta_entry(barcode_only, read_id, read1_ed, bc_qv)
         fastq_entry.description = "{} bc_uncorr={} bc_qv={:.2f}".format(
@@ -331,31 +416,54 @@ def align_adapter(tup):
     return fasta_entry, fastq_entry
 
 
-def launch_alignment_pool(batch_entries, args):
+def launch_alignment_pool(batch, args):
+    """
+    First builds a list of tuples (<func_args>), where each tuple contains the
+    arguments required by the function that is being executed by the
+    multiprocessing pool. Then launch the pool and return the results.
+
+    :param batch: List of FASTQ SeqRecord entries batched from the input FASTQ file
+    :type batch: list
+    :param args: object containing all supplied arguments
+    :type args: class argparse.Namespace
+    :return fasta_entries: List of Biopython FASTA Seq records containing
+        identified (uncorrected) cell barcode sequences
+    :rtype fasta_entries: list
+    :return fastq_entries: List of Biopython FASTQ Seq records containing the
+        reads with the identified cell barcode (bc_uncorr) and barcode mean
+        quality value (bc_qv) added to the read headers
+    :rtype fastq_entries: list
+    """
     func_args = []
 
-    for r in batch_entries:
+    for r in batch:
         if len(str(r.seq)) > 0:
             func_args.append((r, args))
 
-    results = launch_pool(args.threads, align_adapter, func_args)
+    results = launch_pool(align_adapter, func_args, args.threads)
     fasta_entries, fastq_entries = list(zip(*results))
     return fasta_entries, fastq_entries
 
 
-def check_input_format(fastq):
-    f = open_fastq(fastq)
+def check_input_format(input_file):
+    """
+    Check that the input is a FASTQ file by just reading the first line.
+
+    :param input_file: Filename to check
+    :type input_file: str
+    """
+    f = open_fastq(input_file)
     line = f.readline()
 
     if line[0] == "@":
         pass
     else:
-        raise ("Unexpected file type! Only *.fastq, and *.fq recognized.")
-    return
+        raise ("Unexpected file type! Check your FASTQ file.")
 
 
 def batch_iterator(iterator, batch_size):
-    """Returns lists of length batch_size.
+    """
+    Returns lists of length batch_size.
 
     This can be used on any iterator, for example to batch up
     SeqRecord objects from Bio.SeqIO.parse(...), or to batch
@@ -382,52 +490,98 @@ def batch_iterator(iterator, batch_size):
             yield batch
 
 
-def load_superlist(args):
+def load_superlist(superlist):
+    """
+    Read contents of the file containing all possible cell barcode sequences.
+    File can be uncompressed or gzipped.
+
+    :param superlist: Path to file containing all possible cell barcodes, e.g.
+        3M-february-2018.txt
+    :type superlist: str
+    :return wl: Set of all possible cell barcodes
+    :rtype wl: set
+    """
+    ext = pathlib.Path(superlist).suffix
+    fn = pathlib.Path(superlist).name
     wl = []
-    with open(args.bc_superlist) as file:
-        for line in tqdm(file, total=get_num_lines(args.bc_superlist)):
-            wl.append(line.strip())
-    return set(np.array(wl))
+    if ext == ".gz":
+        with gzip.open(superlist, "rt") as file:
+            for line in tqdm(file, desc=f"Loading barcodes in {fn}", unit=" barcodes"):
+                wl.append(line.strip())
+    elif ext == ".txt":
+        with open(superlist) as file:
+            for line in tqdm(file, desc=f"Loading barcodes in {fn}", unit=" barcodes"):
+                wl.append(line.strip())
+    wl = set(wl)
+    return wl
 
 
 def open_fastq(fastq):
-    if fastq.split(".")[-1] == "gz":
+    """
+    Open the supplied FASTQ file, depending on whether it is gzipped or uncompressed
+
+    :param fastq: Path to supplied FASTQ file
+    :type fastq: str
+    :return f: File handle for FASTQ file
+    :rtype f: class '_io.TextIOWrapper'
+    """
+    ext = pathlib.Path(fastq).suffix
+    if ext == ".gz":
         f = gzip.open(fastq, "rt")
     else:
         f = open(fastq, "r+")
     return f
 
 
-def mmap_line_count(f):
-    buf = mmap.mmap(f.fileno(), 0)
-    lines = 0
-    while buf.readline():
-        lines += 1
-    return lines
-
-
-def get_num_lines(file_path):
-    f = open(file_path, "r+")
-    lines = mmap_line_count(f)
-    return lines
-
-
 def count_reads(fastq):
-    logger.info("Counting reads")
-    number_lines = 0
+    """
+    Get the number of reads from a FASTQ file. Does this by simply dividing the
+    number of lines in the file by four.
+
+    :param fastq: Path to supplied FASTQ file
+    :type fastq: str
+    :return n_reads: Number of reads in FASTQ file
+    :rtype n_reads: int
+    """
+    n_lines = 0
+    fn = pathlib.Path(fastq).name
     with open_fastq(fastq) as f:
-        for line in tqdm(f, unit_scale=0.25, unit=" reads"):
-            number_lines += 1
-    return number_lines / 4
+        for line in tqdm(
+            f, desc=f"Counting reads in {fn}", unit_scale=0.25, unit=" reads"
+        ):
+            n_lines += 1
+    n_reads = int(n_lines / 4)
+    return n_reads
 
 
 def write_tmp_files(fasta_entries, fastq_entries, wl, args):
+    """
+    Write temporary files for each batch of reads. Each batch will generate
+    (1) a temporary FASTQ of reads with the barcode info in the read headers,
+    (2) a temporary FASTA of the uncorrected cell barcode found in each read.
+
+    :param fasta_entries: List of Biopython FASTA Seq records containing
+        identified (uncorrected) cell barcode sequences
+    :type fasta_entries: list
+    :param fastq_entries: List of Biopython FASTQ Seq records containing the
+        reads with the identified cell barcode (bc_uncorr) and barcode mean
+        quality value (bc_qv) added to the read headers
+    :type fastq_entries: list
+    :param wl:
+    :type wl: set
+    :param args: object containing all supplied arguments
+    :type args: class argparse.Namespace
+    :return hq: Path to temporary FASTA file of cell barcodes found in each read
+    :rtype hq: str
+    :return read: Path to temporary FASTQ file of reads with cell barcode info
+        in the read headers
+    :rtype read: str
+    """
     hq_fastas = []
     for fasta_entry in fasta_entries:
         if fasta_entry is not None:
-            if args.bc_superlist is not None:
-                if fasta_entry.seq in wl:
-                    hq_fastas.append(fasta_entry)
+            if fasta_entry.seq in wl:
+                hq_fastas.append(fasta_entry)
 
     hq_tmp_fasta = tempfile.NamedTemporaryFile(
         prefix="tmp.hq.bc.", suffix=".fasta", dir=args.tempdir, delete=False
@@ -438,41 +592,45 @@ def write_tmp_files(fasta_entries, fastq_entries, wl, args):
     SeqIO.write(hq_fastas, hq_tmp_fasta.name, "fasta")
     valid_fastq_entries = [entry for entry in fastq_entries if entry is not None]
     SeqIO.write(valid_fastq_entries, tmp_read_fastq.name, "fastq")
-    return hq_tmp_fasta.name, tmp_read_fastq.name
+    hq = hq_tmp_fasta.name
+    read = tmp_read_fastq.name
+    return hq, read
 
 
 def main(args):
     init_logger(args)
     check_input_format(args.fastq)
-    n_reads = int(count_reads(args.fastq))
-    n_batches = int(n_reads / args.batch_size)
+    n_reads = count_reads(args.fastq)
+    n_batches = int(np.ceil(n_reads / args.batch_size))
 
-    if args.bc_superlist is not None:
-        logger.info("Loading barcode superlist")
-        wl = load_superlist(args)
-    else:
-        wl = None
+    # logger.info("Loading barcode superlist")
+    wl = load_superlist(args.superlist)
 
     f = open_fastq(args.fastq)
     record_iter = SeqIO.parse(f, "fastq")
 
-    logger.info("Processing {n} reads in {b} batches".format(n=n_reads, b=n_batches))
+    logger.info(
+        f"Processing {n_reads} total reads in {n_batches} batches of "
+        f"{args.batch_size} reads"
+    )
+
+    # Create temporary directory
     if os.path.exists(args.tempdir):
         shutil.rmtree(args.tempdir)
     os.mkdir(args.tempdir)
 
+    # Process reads from the FASTQ file in batches to manage memory usage
     tmp_read_fastqs = []
-    hq_tmp_fastas = []
-    for i, batch_entries in enumerate(
-        tqdm(batch_iterator(record_iter, args.batch_size), total=n_batches)
-    ):
+    tmp_hq_fastas = []
+    batches = batch_iterator(record_iter, args.batch_size)
+    for batch in tqdm(batches, total=n_batches):
 
-        fasta_entries, fastq_entries = launch_alignment_pool(batch_entries, args)
+        fasta_entries, fastq_entries = launch_alignment_pool(batch, args)
         hq_tmp_fasta, tmp_read_fastq = write_tmp_files(
             fasta_entries, fastq_entries, wl, args
         )
         tmp_read_fastqs.append(tmp_read_fastq)
-        hq_tmp_fastas.append(hq_tmp_fasta)
+        tmp_hq_fastas.append(hq_tmp_fasta)
 
     logger.info(
         f"Writing reads with putative barcodes in header to {args.output_reads}"
@@ -484,13 +642,13 @@ def main(args):
 
     logger.info(f"Writing superlist-filtered putative barcodes to {args.output_hq_bc}")
     with open(args.output_hq_bc, "wb") as f_out:
-        for tmp_fasta in hq_tmp_fastas:
+        for tmp_fasta in tmp_hq_fastas:
             with open(tmp_fasta, "rb") as f_:
                 shutil.copyfileobj(f_, f_out)
 
-    logger.info("Cleaning up")
+    logger.info("Cleaning up temporary files")
     [os.remove(fn) for fn in tmp_read_fastqs]
-    [os.remove(fn) for fn in hq_tmp_fastas]
+    [os.remove(fn) for fn in tmp_hq_fastas]
     shutil.rmtree(args.tempdir)
 
 
