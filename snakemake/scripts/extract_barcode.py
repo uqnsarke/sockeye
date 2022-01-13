@@ -399,11 +399,11 @@ def align_adapter(tup):
         start_idx = prefix_seq.find(barcode_umi)
         bc_qv = prefix_qv[start_idx : (start_idx + args.barcode_length + 1)]
 
-        print(read_id)
-        print(alignment.traceback.ref)
-        print(alignment.traceback.comp)
-        print(alignment.traceback.query)
-        print()
+        # print(read_id)
+        # print(alignment.traceback.ref)
+        # print(alignment.traceback.comp)
+        # print(alignment.traceback.query)
+        # print()
 
         fasta_entry = create_fasta_entry(barcode_only, read_id, read1_ed, bc_qv)
         fastq_entry.description = "{} bc_uncorr={} bc_qv={:.2f}".format(
