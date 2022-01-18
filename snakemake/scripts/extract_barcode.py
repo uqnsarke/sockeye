@@ -25,8 +25,8 @@ def parse_args():
     """
     Parse the command line arguments
 
-    :return args: object containing all supplied arguments
-    :rtype args: class argparse.Namespace
+    :return: object containing all supplied arguments
+    :rtype: class argparse.Namespace
     """
     # Create argument parser
     parser = argparse.ArgumentParser()
@@ -207,8 +207,8 @@ def update_matrix(args):
 
     :param args: object containing all supplied arguments
     :type args: class argparse.Namespace
-    :return: matrix: custom parasail alignment matrix
-    :rtype matrix: parasail.bindings_v2.Matrix
+    :return: custom parasail alignment matrix
+    :rtype: parasail.bindings_v2.Matrix
     """
     matrix = parasail.matrix_create("ACGTN", args.match, args.mismatch)
 
@@ -245,8 +245,8 @@ def launch_pool(func, func_args, procs=1):
     :type func: function
     :param func_args: List containing arguments for each call to function <funct>
     :type func_args: list
-    :return results: List of results returned by each call to function <funct>
-    :rtype results: list
+    :return: List of results returned by each call to function <funct>
+    :rtype: list
     """
     p = multiprocessing.Pool(processes=procs)
     try:
@@ -267,8 +267,8 @@ def find(char, string):
     :type char: str
     :param string: String to search for the target character positions
     :type string: str
-    :return i: Indices in the string corresponding to the target character
-    :rtype i: iterator
+    :return: Indices in the string corresponding to the target character
+    :rtype: iterator
     """
     for i in range(len(string)):
         if string[i] == char:
@@ -283,8 +283,8 @@ def edit_distance(query, target):
     :type query: str
     :param target: Target string to compare against the query
     :type target: str
-    :return d: Calculated Levenshtein distance between query and target
-    :rtype d: int
+    :return: Calculated Levenshtein distance between query and target
+    :rtype: int
     """
     d = ed.eval(query, target)
     return d
@@ -297,13 +297,11 @@ def align_adapter(tup):
 
     :param tup: Tuple containing the function arguments
     :type tup: tup
-    :return fasta_entry: Biopython FASTA Seq record containing identified (uncorrected)
-        cell barcode sequence
-    :rtype fasta_entry: class 'Bio.SeqRecord.SeqRecord'
-    :return fastq_entry: Biopython FASTQ Seq record containing the read with the
-        identified cell barcode (bc_uncorr) and barcode mean quality value (bc_qv)
-        added to the read header
-    :rtype fastq_entry: class 'Bio.SeqRecord.SeqRecord'
+    :return: Biopython FASTA Seq record containing identified (uncorrected) cell
+        barcode sequence and Biopython FASTQ Seq record containing the read with
+        the identified cell barcode (bc_uncorr) and barcode mean quality value
+        (bc_qv) added to the read header
+    :rtype: class 'Bio.SeqRecord.SeqRecord'
     """
     fastq_entry = tup[0]
     args = tup[1]
@@ -326,9 +324,9 @@ def align_adapter(tup):
         :param bc_qv: Mean quality value for positions corresponding to the identified
             cell barcode
         :type bc_qv: float
-        :return fasta_entry: Biopython FASTA Seq record containing the identified
-            (uncorrected) cell barcode sequence
-        :rtype fasta_entry: class 'Bio.SeqRecord.SeqRecord'
+        :return: Biopython FASTA Seq record containing the identified (uncorrected)
+            cell barcode sequence
+        :rtype: class 'Bio.SeqRecord.SeqRecord'
         """
         fasta_entry = SeqRecord(
             Seq(barcode),
@@ -426,13 +424,12 @@ def launch_alignment_pool(batch, args):
     :type batch: list
     :param args: object containing all supplied arguments
     :type args: class argparse.Namespace
-    :return fasta_entries: List of Biopython FASTA Seq records containing
-        identified (uncorrected) cell barcode sequences
-    :rtype fasta_entries: list
-    :return fastq_entries: List of Biopython FASTQ Seq records containing the
-        reads with the identified cell barcode (bc_uncorr) and barcode mean
-        quality value (bc_qv) added to the read headers
-    :rtype fastq_entries: list
+    :return: List of Biopython FASTA Seq records containing identified
+        (uncorrected) cell barcode sequences and List of Biopython FASTQ Seq
+        records containing the reads with the identified cell barcode
+        (bc_uncorr) and barcode mean quality value (bc_qv) added to the read
+        headers
+    :rtype: list
     """
     func_args = []
 
@@ -498,8 +495,8 @@ def load_superlist(superlist):
     :param superlist: Path to file containing all possible cell barcodes, e.g.
         3M-february-2018.txt
     :type superlist: str
-    :return wl: Set of all possible cell barcodes
-    :rtype wl: set
+    :return: Set of all possible cell barcodes
+    :rtype: set
     """
     ext = pathlib.Path(superlist).suffix
     fn = pathlib.Path(superlist).name
@@ -522,8 +519,8 @@ def open_fastq(fastq):
 
     :param fastq: Path to supplied FASTQ file
     :type fastq: str
-    :return f: File handle for FASTQ file
-    :rtype f: class '_io.TextIOWrapper'
+    :return: File handle for FASTQ file
+    :rtype: class '_io.TextIOWrapper'
     """
     ext = pathlib.Path(fastq).suffix
     if ext == ".gz":
@@ -540,8 +537,8 @@ def count_reads(fastq):
 
     :param fastq: Path to supplied FASTQ file
     :type fastq: str
-    :return n_reads: Number of reads in FASTQ file
-    :rtype n_reads: int
+    :return: Number of reads in FASTQ file
+    :rtype: int
     """
     n_lines = 0
     fn = pathlib.Path(fastq).name
@@ -571,11 +568,10 @@ def write_tmp_files(fasta_entries, fastq_entries, wl, args):
     :type wl: set
     :param args: object containing all supplied arguments
     :type args: class argparse.Namespace
-    :return hq: Path to temporary FASTA file of cell barcodes found in each read
-    :rtype hq: str
-    :return read: Path to temporary FASTQ file of reads with cell barcode info
-        in the read headers
-    :rtype read: str
+    :return: Path to temporary FASTA file of cell barcodes found in each read
+        and path to temporary FASTQ file of reads with cell barcode info in the
+        read headers
+    :rtype: str
     """
     hq_fastas = []
     for fasta_entry in fasta_entries:

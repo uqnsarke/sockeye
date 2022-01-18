@@ -30,8 +30,7 @@ def parse_args():
     # Optional arguments
     parser.add_argument(
         "--output",
-        help="Output barcode/umi tagged BAM file name \
-                        [sorted.bc_umi.bam]",
+        help="Output barcode/umi tagged BAM file name [sorted.bc_umi.bam]",
         type=str,
         default="sorted.bc_umi.bam",
     )

@@ -106,11 +106,11 @@ include: "rules/features.smk"
 ##### target rules #####
 rule all:
     input:
-        expand(READ_CONFIG, run_id=RUN_IDS),
-        expand(STRANDED_FQ, run_id=RUN_IDS),
-        expand(CONFIG_STATS, run_id=RUN_IDS),
-        expand(BARCODES_CORR_READS_FILTERED, run_id=RUN_IDS),
-        expand(BAM_SORT, run_id=RUN_IDS),
-        expand(FC_SUMMARY, run_id=RUN_IDS),
+        # expand(READ_CONFIG, run_id=RUN_IDS),
+        # expand(STRANDED_FQ, run_id=RUN_IDS),
+        # expand(CONFIG_STATS, run_id=RUN_IDS),
+        # expand(BARCODES_CORR_READS_FILTERED, run_id=RUN_IDS),
+        # expand(BAM_SORT, run_id=RUN_IDS),
+        # expand(FC_SUMMARY, run_id=RUN_IDS),
         expand(TAGGED_BAM, run_id=RUN_IDS),
         expand(SAT_PLOT, run_id=RUN_IDS),
