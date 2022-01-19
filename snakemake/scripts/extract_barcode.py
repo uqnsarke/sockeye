@@ -250,7 +250,7 @@ def launch_pool(func, func_args, procs=1):
     """
     p = multiprocessing.Pool(processes=procs)
     try:
-        results = p.map(func, func_args)
+        results = list(tqdm(p.imap(func, func_args), total=len(func_args)))
         p.close()
         p.join()
     except KeyboardInterrupt:
@@ -356,10 +356,11 @@ def align_adapter(tup):
     bam_out = pysam.AlignmentFile(chrom_bam.name, "wb", template=bam)
 
     chrom_barcode_counts = collections.Counter()
+
     for align in bam.fetch(contig=chrom):
-        read_id = align.query_name.split(" ")[0]
-        prefix_seq = align.query_sequence[: args.window]
-        prefix_qv = align.query_qualities[: args.window]
+
+        prefix_seq = align.get_forward_sequence()[: args.window]
+        prefix_qv = align.get_forward_qualities()[: args.window]
 
         alignment = parasail_alg(
             s1=prefix_seq,
@@ -382,8 +383,8 @@ def align_adapter(tup):
             bc_qv = np.mean(prefix_qv[bc_start : (bc_start + args.barcode_length + 1)])
             chrom_barcode_counts[barcode] += 1
 
-            # Corrected cell barcode = CB:Z
-            align.set_tag("CB", barcode, value_type="Z")
+            # Uncorrected cell barcode = CR:Z
+            align.set_tag("CR", barcode, value_type="Z")
             # Cell barcode quality score = CY:Z
             align.set_tag("CY", "{:.2f}".format(bc_qv), value_type="Z")
 
@@ -398,12 +399,6 @@ def align_adapter(tup):
             align.set_tag("CB", "X" * args.barcode_length, value_type="Z")
             # Cell barcode quality score = CY:Z
             align.set_tag("CY", "0.0", value_type="Z")
-
-            print(read_id)
-            print(alignment.traceback.ref)
-            print(alignment.traceback.comp)
-            print(alignment.traceback.query)
-            print()
 
         bam_out.write(align)
 
@@ -469,6 +464,7 @@ def main(args):
     os.mkdir(args.tempdir)
 
     # Process BAM alignments from each chrom separately
+    logger.info(f"Extracting uncorrected barcodes from {args.bam}")
     func_args = []
     for chrom in chroms:
         func_args.append((args.bam, chrom, args))
@@ -491,10 +487,17 @@ def main(args):
     logger.info(
         f"Writing BAM with uncorrected barcodes in read ID to {args.output_bam}"
     )
-    merge_parameters = ["-f", args.output_bam] + list(chrom_bam_fns)
+    tmp_bam = tempfile.NamedTemporaryFile(
+        prefix="tmp.align.", suffix=".unsorted.bam", dir=args.tempdir, delete=False
+    )
+    merge_parameters = ["-f", tmp_bam.name] + list(chrom_bam_fns)
     pysam.merge(*merge_parameters)
 
+    pysam.sort("-@", str(args.threads), "-o", args.output_bam, tmp_bam.name)
+    pysam.index(args.output_bam)
+
     logger.info("Cleaning up temporary files")
+    os.remove(tmp_bam.name)
     shutil.rmtree(args.tempdir)
 
 
