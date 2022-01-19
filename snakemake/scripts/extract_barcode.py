@@ -144,8 +144,8 @@ def parse_args():
 
     parser.add_argument(
         "--output_bam",
-        help="Output BAM file containing aligned reads with uncorrected barcodes \
-        in the read ID [bc_uncorr.sorted.bam]",
+        help="Output BAM file containing aligned reads with tags for uncorrected \
+        barcodes (CR) and barcode QVs (CY) [bc_uncorr.sorted.bam]",
         type=str,
         default="bc_uncorr.sorted.bam",
     )
@@ -156,14 +156,6 @@ def parse_args():
         [barcodes_counts.tsv]",
         type=str,
         default="barcodes_counts.tsv",
-    )
-
-    parser.add_argument(
-        "-b",
-        "--batch_size",
-        help="Number of reads to load at once [20000]",
-        type=int,
-        default=20000,
     )
 
     parser.add_argument(
@@ -394,14 +386,10 @@ def align_adapter(tup):
             # print(alignment.traceback.query)
             # print()
 
-        else:
-            # Corrected cell barcode = CB:Z
-            align.set_tag("CB", "X" * args.barcode_length, value_type="Z")
-            # Cell barcode quality score = CY:Z
-            align.set_tag("CY", "0.0", value_type="Z")
+            # Only write BAM entry in output file if it will have CR and CY tags
+            bam_out.write(align)
 
-        bam_out.write(align)
-
+    bam.close()
     bam_out.close()
 
     return chrom_bam.name, chrom_barcode_counts
@@ -484,9 +472,7 @@ def main(args):
             f_barcode_counts.write(f"{barcode}\t{n}\n")
     f_barcode_counts.close()
 
-    logger.info(
-        f"Writing BAM with uncorrected barcodes in read ID to {args.output_bam}"
-    )
+    logger.info(f"Writing BAM with uncorrected barcode tags to {args.output_bam}")
     tmp_bam = tempfile.NamedTemporaryFile(
         prefix="tmp.align.", suffix=".unsorted.bam", dir=args.tempdir, delete=False
     )
@@ -497,7 +483,6 @@ def main(args):
     pysam.index(args.output_bam)
 
     logger.info("Cleaning up temporary files")
-    os.remove(tmp_bam.name)
     shutil.rmtree(args.tempdir)
 
 

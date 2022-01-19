@@ -20,9 +20,9 @@ def parse_args():
 
     # Positional mandatory arguments
     parser.add_argument(
-        "fasta",
-        help="FASTA file containing VSEARCH cluster consensus \
-                        sequences.",
+        "barcodes",
+        help="TSV file containing counts for uncorrected barcodes that are \
+            present in the barcode superlist.",
         type=str,
     )
 
@@ -235,12 +235,14 @@ def getKneeEstimateDensity(
     return final_barcodes, threshold
 
 
-def get_clust_sizes(fasta):
-    clust_sizes = {}
-    for header, seq in SimpleFastaParser(open(fasta, "r")):
-        n = int(header.split(";")[1].split("=")[1])
-        clust_sizes[seq] = n
-    return clust_sizes
+def get_barcode_counts(barcodes):
+    barcode_counts = {}
+    for line in open(barcodes, "r"):
+        line = line.strip()
+        seq = line.split("\t")[0]
+        n = int(line.split("\t")[1])
+        barcode_counts[seq] = n
+    return barcode_counts
 
 
 def apply_bc_cutoff(ont_bc_sorted, idx):
@@ -405,13 +407,15 @@ def init_logger(args):
 
 
 def main(args):
-    ont_bc = get_clust_sizes(args.fasta)
+    ont_bc = get_barcode_counts(args.barcodes)
     if args.ilmn_barcodes is not None:
         ilmn_bc = read_ilmn_barcodes(args.ilmn_barcodes)
         conserved_bc = intersect_ont_ilmn(ont_bc, ilmn_bc)
     else:
         ilmn_bc = {}
         conserved_bc = {}
+
+    logger.info(f"Generating knee plot: {args.output_plot}")
     make_kneeplot(ont_bc, ilmn_bc, conserved_bc, args)
 
 

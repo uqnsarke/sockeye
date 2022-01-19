@@ -10,9 +10,9 @@ import shutil
 import tempfile
 
 import editdistance as ed
-import pandas as pd
-from Bio import SeqIO
-from Bio.SeqIO.FastaIO import SimpleFastaParser
+import numpy as np
+import parasail
+import pysam
 from tqdm import tqdm
 
 logger = logging.getLogger(__name__)
@@ -24,8 +24,9 @@ def parse_args():
 
     # Positional mandatory arguments
     parser.add_argument(
-        "fastq",
-        help="FASTQ file of reads with putative barcode sequences in header",
+        "bam",
+        help="Sorted BAM file of stranded sequencing reads aligned to a reference. \
+            Alignments must have the CR and CY tags.",
         type=str,
     )
 
@@ -43,19 +44,12 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--output_all",
-        help="Output file containing all reads with unfiltered barcode assignments \
-        [reads.bc_corr.fastq]",
+        "--output",
+        help="Output BAM file containing aligned reads with tags for uncorrected \
+        barcodes (CR), corrected barcodes (CB), barcode QVs (CY), uncorrected \
+        UMIs (UR), and UMI QVs (UY) [bc_corr.umi_uncorr.sorted.bam]",
         type=str,
-        default="reads.bc_corr.fastq",
-    )
-
-    parser.add_argument(
-        "--output_filtered",
-        help="Output file containing only reads with high-confidence barcode \
-        assignments [reads.bc_corr.filt.fastq]",
-        type=str,
-        default="reads.bc_corr.filt.fastq",
+        default="bc_corr.umi_uncorr.sorted.bam",
     )
 
     parser.add_argument(
@@ -76,15 +70,70 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--barcode_length", help="Cell barcode length [16]", type=int, default=16
+        "-r",
+        "--read1_adapter",
+        help="Read1 adapter sequence to use in the alignment query [CTACACGACGCTCTTCCGATCT]",
+        default="CTACACGACGCTCTTCCGATCT",
+        type=str,
     )
 
     parser.add_argument(
-        "-b",
-        "--batch_size",
-        help="Number of reads to load at once [20000]",
+        "--read1_suff_length",
+        help="Use this many suffix bases from read1 sequence \
+                        in the alignment query. For example, specifying 12 \
+                        would mean that the last 12 bases of the specified \
+                        read1 sequence will be included in the probe sequence \
+                        [10]",
+        default=10,
         type=int,
-        default=20000,
+    )
+
+    parser.add_argument(
+        "-T",
+        "--polyT_length",
+        help="Length of polyT sequence to use in the alignment query [10]",
+        type=int,
+        default=10,
+    )
+
+    parser.add_argument(
+        "--barcode_length", help="Cell barcode length [16]", type=int, default=16
+    )
+
+    parser.add_argument("--umi_length", help="UMI length [12]", type=int, default=12)
+
+    parser.add_argument(
+        "-w",
+        "--window",
+        help="Number of bases to query at start of read [100]",
+        type=int,
+        default=100,
+    )
+
+    parser.add_argument(
+        "-o", "--gap_open", help="Gap open penalty [2]", type=int, default=2
+    )
+
+    parser.add_argument(
+        "-e", "--gap_extend", help="Gap extend penalty [4]", type=int, default=4
+    )
+
+    parser.add_argument("-m", "--match", help="Match score [5]", type=int, default=5)
+
+    parser.add_argument(
+        "-x", "--mismatch", help="Mismatch score [-1]", type=int, default=-1
+    )
+
+    parser.add_argument(
+        "-n",
+        "--acg_to_n_match",
+        help="Score for A/C/G<-->N match [1]",
+        type=int,
+        default=1,
+    )
+
+    parser.add_argument(
+        "-s", "--t_to_n_match", help="Score for T<-->N match [1]", type=int, default=1
     )
 
     parser.add_argument(
@@ -98,7 +147,7 @@ def parse_args():
     args = parser.parse_args()
 
     # Create temp dir and add that to the args object
-    p = pathlib.Path(args.output_all)
+    p = pathlib.Path(args.output)
     tempdir = tempfile.TemporaryDirectory(prefix="tmp.", dir=p.parents[0])
     args.tempdir = tempdir.name
 
@@ -117,90 +166,231 @@ def init_logger(args):
     # logger.warning('!! Failures detected !!')
 
 
-class Barcode:
-    def __init__(self, read_id, found_bc):
-        """
-        Define basic characteristic of the barcode that we
-        want to classify
-        """
-        self.read_id = read_id
-        self.found_bc = found_bc
-
-    def calc_ed_with_whitelist(self, whitelist):
-        """
-        Find minimum and runner-up barcode edit distance by
-        iterating through the whitelist of expected barcodes
-        """
-        self.match_bc = "X" * len(self.found_bc)
-        self.match_ed = len(self.found_bc)
-        self.runner_up_bc = "X" * len(self.found_bc)
-        self.runner_up_ed = len(self.found_bc)
-        for wl_bc in whitelist:
-            d = ed.eval(self.found_bc, wl_bc)
-            if d < self.match_ed:
-                self.runner_up_ed = self.match_ed
-                self.runner_up_bc = self.match_bc
-                self.match_ed = d
-                self.match_bc = wl_bc
-        self.match_runner_up_diff = self.runner_up_ed - self.match_ed
+def find(target, myList):
+    for i in range(len(myList)):
+        if myList[i] == target:
+            yield i
 
 
-def get_val_from_read_header(REGEX, header):
+def update_matrix(args):
     """
-    Use regular expression to extract value from read header
+    Create new parasail scoring matrix. 'N' is used as wildcard character
+    for barcodes and has its own match parameter (0 per default).
+    :return: args: arguments
+    :rtype args, args
     """
-    m = re.search(REGEX, header)
-    return m.group(1)
+    matrix = parasail.matrix_create("ACGTN", args.match, args.mismatch)
+
+    ############################
+    # SCORING MATRIX POSITIONS #
+    ############################
+    #     A   C   G   T   N
+    # A   0   1   2   3   4   5
+    # C   6   7   8   9   10  11
+    # G   12  13  14  15  16  17
+    # T   18  19  20  21  22  23
+    # N   24  25  26  27  28  29
+
+    # Update scoring matrix so that N matches A/C/G/N
+    # pointers = [4, 9, 14, 20, 21, 22, 24]
+    pointers = [4, 10, 16, 24, 25, 26]
+    for i in pointers:
+        matrix.pointer[0].matrix[i] = args.acg_to_n_match
+
+    # Update N to T matching score so that we start
+    # aligning dT sequence instead of Ns.
+    matrix.pointer[0].matrix[22] = args.t_to_n_match
+    matrix.pointer[0].matrix[27] = args.t_to_n_match
+    return matrix
 
 
-def calc_ed(tup):
+def calc_ed_with_whitelist(bc_uncorr, whitelist):
     """
-    Filter the whitelist by kmers and find least edit distance match
+    Find minimum and runner-up barcode edit distance by
+    iterating through the whitelist of expected barcodes
     """
-    read = tup[0]
-    kmer_to_bc_index = tup[1]
-    whitelist = tup[2]
-    args = tup[3]
+    bc_match = "X" * len(bc_uncorr)
+    bc_match_ed = len(bc_uncorr)
+    next_bc_match_ed = len(bc_uncorr)
+    for wl_bc in whitelist:
+        d = ed.eval(bc_uncorr, wl_bc)
+        if d < bc_match_ed:
+            next_bc_match_ed = bc_match_ed
+            bc_match_ed = d
+            bc_match = wl_bc
+    next_match_diff = next_bc_match_ed - bc_match_ed
 
-    REGEX_bc_uncorr = r"bc_uncorr=([ACGT]{{{}}})".format(args.barcode_length)
-    barcode = get_val_from_read_header(REGEX_bc_uncorr, read.description)
-
-    REGEX_bc_qv = r"bc_qv=(\d+\.\d+)"
-    bc_qv = get_val_from_read_header(REGEX_bc_qv, read.description)
-
-    kmers = split_barcode_into_kmers(barcode, args.k)
-    filt_whitelist = filter_whitelist_by_kmers(whitelist, kmers, kmer_to_bc_index)
-
-    # Instantiate barcode object
-    read_bc = Barcode(read.id, barcode)
-    # Calc edit distances and store min & runner up
-    read_bc.calc_ed_with_whitelist(filt_whitelist)
-
-    # Construct the updated read header
-    read.description = f"{read.id}"
-    read.description += f" bc_uncorr={barcode}"
-    read.description += f" bc_corr={read_bc.match_bc}"
-    read.description += f" bc_qv={bc_qv}"
-    read.description += f" ed={read_bc.match_ed}"
-    read.description += f" diff={read_bc.match_runner_up_diff}"
-
-    # Check barcode match edit distance and difference to runner-up edit distance
-    if (read_bc.match_ed <= args.max_ed) and (
-        read_bc.match_runner_up_diff >= args.min_ed_diff
-    ):
-        # This is a high-confidence barcode assignment
-        read.features.append({"hi-conf": True})
-    else:
-        # This is NOT a high-confidence barcode assignment
-        read.features.append({"hi-conf": False})
-
-    return read
+    return bc_match, bc_match_ed, next_match_diff
 
 
-def launch_pool(procs, funct, args):
+def parse_probe_alignment(p_alignment, align, prefix_seq, prefix_qv):
+    """
+    Parse a parasail alignment alignment and add uncorrected UMI and UMI QV
+    values as tags to the BAM alignment.
+
+    :param p_alignment: parasail alignment
+    :type p_alignment:
+    :param align: pysam BAM alignment
+    :type align:
+    :return: pysam BAM alignment with the UR and UY tags added
+    :rtype:
+    """
+    # Find the position of the Ns in the parasail alignment. These correspond
+    # to the UMI sequences bound by the cell barcode and polyT
+    idxs = list(find("N", p_alignment.traceback.ref))
+    if len(idxs) > 0:
+        umi = p_alignment.traceback.query[min(idxs) : max(idxs) + 1]
+
+        umi = umi.strip("-")
+        start_idx = prefix_seq.find(umi)
+        umi_qv = np.mean(prefix_qv[start_idx : (start_idx + len(umi))])
+
+        # print(alignment.traceback.ref)
+        # print(alignment.traceback.comp)
+        # print(alignment.traceback.query)
+        # print()
+
+        # Uncorrected UMI = UR:Z
+        align.set_tag("UR", umi, value_type="Z")
+        # UMI quality score = UY:Z
+        align.set_tag("UY", "{:.2f}".format(umi_qv), value_type="Z")
+
+    return align
+
+
+def get_uncorrected_umi(align, args):
+    """
+    Aligns a probe sequence containing the read1+corrected_barcode+Ns+polyT to
+    the read. Bases aligning to the Ns in the probe sequence correspond to the
+    UMI positions. Extract those bases and consider those to be the uncorrected
+    UMI sequence.
+
+    :param align:
+    :type align:
+    :param args:
+    :type args:
+    :return:
+    :rtype:
+    """
+    prefix_seq = align.get_forward_sequence()[: args.window]
+    prefix_qv = align.get_forward_qualities()[: args.window]
+
+    # Use only the specified suffix length of the read1 adapter
+    read1_probe_seq = args.read1_adapter[-args.read1_suff_length :]
+    # Compile the actual query sequence of <read1_suffix><bc_corr>NNN...N<TTTTT....>
+    probe_seq = "{r}{bc}{umi}{pT}".format(
+        r=read1_probe_seq,
+        bc=align.get_tag("CB"),
+        umi="N" * args.umi_length,
+        pT="T" * args.polyT_length,
+    )
+
+    matrix = update_matrix(args)
+    parasail_alg = parasail.sw_trace
+
+    p_alignment = parasail_alg(
+        s1=prefix_seq,
+        s2=probe_seq,
+        open=args.gap_open,
+        extend=args.gap_extend,
+        matrix=matrix,
+    )
+
+    align = parse_probe_alignment(p_alignment, align, prefix_seq, prefix_qv)
+
+    return align
+
+
+def process_bam_records(tup):
+    """
+    Process BAM records to assign each read a corrected cell barcode and an
+    uncorrected UMI. Do this by loading and processing the barcode whitelist
+    then iterating over alignments.
+    For each alignment:
+    1. Calculate edit distance between uncorrected barcode and barcodes in whitelist
+    2.
+
+    :param tup:
+    :type tup: tup
+    :return:
+    :rtype:
+    """
+    input_bam = tup[0]
+    chrom = tup[1]
+    args = tup[2]
+
+    # Load barcode whitelist and map kmers to indices in whitelist for faster
+    # barcode matching
+    whitelist, kmer_to_bc_index = load_whitelist(args.whitelist, args.k)
+
+    # Open input BAM file
+    bam = pysam.AlignmentFile(input_bam, "rb")
+
+    # Open temporary output BAM file for writing
+    suff = f".{chrom}.bam"
+    chrom_bam = tempfile.NamedTemporaryFile(
+        prefix="tmp.align.", suffix=suff, dir=args.tempdir, delete=False
+    )
+    bam_out = pysam.AlignmentFile(chrom_bam.name, "wb", template=bam)
+
+    for align in bam.fetch(contig=chrom):
+        # Make sure each alignment in this BAM has an uncorrected baracode and
+        # barcode QV
+        assert align.has_tag("CR") and align.has_tag("CY"), "CR or CY tags not found"
+
+        bc_uncorr = align.get_tag("CR")
+
+        # Decompose uncorrected barcode into N k-mers
+        bc_uncorr_kmers = split_barcode_into_kmers(bc_uncorr, args.k)
+        # Filter the whitelist to only those with at least one of the k-mers
+        # from the uncorrected barcode
+        filt_whitelist = filter_whitelist_by_kmers(
+            whitelist, bc_uncorr_kmers, kmer_to_bc_index
+        )
+
+        # Calc edit distances between uncorrected barcode and the filtered
+        # whitelist barcodes
+        bc_match, bc_match_ed, next_match_diff = calc_ed_with_whitelist(
+            bc_uncorr, filt_whitelist
+        )
+
+        # Check barcode match edit distance and difference to runner-up edit distance
+        condition1 = bc_match_ed <= args.max_ed
+        condition2 = next_match_diff >= args.min_ed_diff
+        if condition1 and condition2:
+            # Add corrected cell barcode = CB:Z
+            align.set_tag("CB", bc_match, value_type="Z")
+
+            # Add corrected barcode to probe sequence to fish out uncorrected UMI
+            align = get_uncorrected_umi(align, args)
+
+            # Only write BAM entry in output file if we've assigned a corrected
+            # barcode and an uncorrected UMI
+            bam_out.write(align)
+
+    bam.close()
+    bam_out.close()
+
+    return chrom_bam.name
+
+
+def launch_pool(func, func_args, procs=1):
+    """
+    Use multiprocessing library to create pool and map function calls to
+    that pool
+
+    :param procs: Number of processes to use for pool
+    :type procs: int, optional
+    :param func: Function to exececute in the pool
+    :type func: function
+    :param func_args: List containing arguments for each call to function <funct>
+    :type func_args: list
+    :return: List of results returned by each call to function <funct>
+    :rtype: list
+    """
     p = multiprocessing.Pool(processes=procs)
     try:
-        results = p.map(funct, args)
+        results = list(tqdm(p.imap(func, func_args), total=len(func_args)))
         p.close()
         p.join()
     except KeyboardInterrupt:
@@ -225,17 +415,6 @@ def filter_whitelist_by_kmers(wl, kmers, kmer_to_bc_index):
     return filt_wl
 
 
-def launch_alignment_pool(batch_reads, whitelist, kmer_to_bc_index, args):
-    func_args = []
-
-    for read in batch_reads:
-        # Read barcode from read header
-        func_args.append((read, kmer_to_bc_index, whitelist, args))
-
-    reads = launch_pool(args.threads, calc_ed, func_args)
-    return reads
-
-
 def split_barcode_into_kmers(bc, k):
     kmers = []
     for i in range(0, len(bc) - k + 1):
@@ -244,9 +423,9 @@ def split_barcode_into_kmers(bc, k):
     return kmers
 
 
-def load_whitelist(args):
+def load_whitelist(whitelist, k=5):
     wl = []
-    with open(args.whitelist) as file:
+    with open(whitelist) as file:
         for line in file:
             bc = line.strip().split("-")[0]
             wl.append(bc)
@@ -254,7 +433,7 @@ def load_whitelist(args):
     wl.sort()
     kmer_to_bc_index = {}
     for index, bc in enumerate(wl):
-        bc_kmers = split_barcode_into_kmers(bc, args.k)
+        bc_kmers = split_barcode_into_kmers(bc, k)
         for bc_kmer in bc_kmers:
             if bc_kmer not in kmer_to_bc_index.keys():
                 kmer_to_bc_index[bc_kmer] = set([index])
@@ -263,118 +442,51 @@ def load_whitelist(args):
     return wl, kmer_to_bc_index
 
 
-def open_fastq(fastq):
-    if fastq.split(".")[-1] == "gz":
-        f = gzip.open(fastq, "rt")
-    else:
-        f = open(fastq, "r+")
-    return f
-
-
-def check_input_format(fastq):
-    f = open_fastq(fastq)
-    line = f.readline()
-    if line[0] == "@":
-        pass
-    else:
-        raise ("Unexpected file type! FASTQ only!")
-    return
-
-
-def batch_iterator(iterator, batch_size):
-    """Returns lists of length batch_size.
-
-    This can be used on any iterator, for example to batch up
-    SeqRecord objects from Bio.SeqIO.parse(...), or to batch
-    Alignment objects from Bio.AlignIO.parse(...), or simply
-    lines from a file handle.
-
-    This is a generator function, and it returns lists of the
-    entries from the supplied iterator.  Each list will have
-    batch_size entries, although the final list may be shorter.
+def get_bam_info(bam):
     """
-    entry = True  # Make sure we loop once
-    while entry:
-        batch = []
-        while len(batch) < batch_size:
-            try:
-                entry = next(iterator)
-            except StopIteration:
-                entry = None
-            if entry is None:
-                # End of file
-                break
-            batch.append(entry)
-        if batch:
-            yield batch
+    Use `samtools idxstat` to get number of alignments and names of all contigs
+    in the reference.
 
-
-def count_barcodes(fastq):
-    logging.info("Counting putative barcodes")
-    number_lines = 0
-    with open_fastq(fastq) as f:
-        for line in tqdm(f, unit_scale=0.5, unit=" barcodes"):
-            number_lines += 1
-    return int(number_lines / 4)
-
-
-def write_tmp_fastq(fastq_entries, args):
-    tmp_read_fastq = tempfile.NamedTemporaryFile(
-        prefix="tmp.read.bc_corr.", suffix=".fastq", dir=args.tempdir, delete=False
-    )
-    tmp_filt_read_fastq = tempfile.NamedTemporaryFile(
-        prefix="tmp.read.bc_corr.filt.", suffix=".fastq", dir=args.tempdir, delete=False
-    )
-    fastq_filt_entries = [r for r in fastq_entries if r.features[0]["hi-conf"]]
-    SeqIO.write(fastq_entries, tmp_read_fastq.name, "fastq")
-    SeqIO.write(fastq_filt_entries, tmp_filt_read_fastq.name, "fastq")
-    return tmp_read_fastq.name, tmp_filt_read_fastq.name
+    :param bam: Path to sorted BAM file
+    :type bame: str
+    :return: Sum of all alignments in the BAM index file and list of all chroms
+    :rtype: int,list
+    """
+    bam = pysam.AlignmentFile(bam, "rb")
+    stats = bam.get_index_statistics()
+    n_aligns = int(np.sum([contig.mapped for contig in stats]))
+    chroms = [contig.contig for contig in stats]
+    bam.close()
+    return n_aligns, chroms
 
 
 def main(args):
     init_logger(args)
-    whitelist, kmer_to_bc_index = load_whitelist(args)
-    check_input_format(args.fastq)
-    n_barcodes = count_barcodes(args.fastq)
-    n_batches = int(math.ceil(n_barcodes / args.batch_size))
+    n_reads, chroms = get_bam_info(args.bam)
 
-    f = open_fastq(args.fastq)
-    record_iter = SeqIO.parse(f, "fastq")
-
-    logger.info(
-        "Processing {n} barcodes in {b} batches".format(n=n_barcodes, b=n_batches)
-    )
+    # Create temporary directory
     if os.path.exists(args.tempdir):
         shutil.rmtree(args.tempdir)
     os.mkdir(args.tempdir)
-    tmp_fastqs = []
-    tmp_filt_fastqs = []
-    for i, batch_reads in enumerate(
-        tqdm(batch_iterator(record_iter, args.batch_size), total=n_batches)
-    ):
 
-        fastq_entries = launch_alignment_pool(
-            batch_reads, whitelist, kmer_to_bc_index, args
-        )
-        tmp_fastq, tmp_filt_fastq = write_tmp_fastq(fastq_entries, args)
-        tmp_fastqs.append(tmp_fastq)
-        tmp_filt_fastqs.append(tmp_filt_fastq)
+    # Process BAM alignments from each chrom separately
+    func_args = []
+    for chrom in chroms:
+        func_args.append((args.bam, chrom, args))
 
-    logger.info(f"Writing all reads with bc_corr to {args.output_all}")
-    with open(args.output_all, "wb") as f_out:
-        for tmp_fastq in tmp_fastqs:
-            with open(tmp_fastq, "rb") as f_:
-                shutil.copyfileobj(f_, f_out)
+    chrom_bam_fns = launch_pool(process_bam_records, func_args, args.threads)
 
-    logger.info(f"Writing filtered reads with bc_corr to {args.output_filtered}")
-    with open(args.output_filtered, "wb") as f_out:
-        for tmp_filt_fastq in tmp_filt_fastqs:
-            with open(tmp_filt_fastq, "rb") as f_:
-                shutil.copyfileobj(f_, f_out)
+    logger.info(f"Writing BAM with CR, CB, CY, UR, and UY tags to {args.output}")
+    tmp_bam = tempfile.NamedTemporaryFile(
+        prefix="tmp.align.", suffix=".unsorted.bam", dir=args.tempdir, delete=False
+    )
+    merge_parameters = ["-f", tmp_bam.name] + list(chrom_bam_fns)
+    pysam.merge(*merge_parameters)
 
-    logger.info("Cleaning up")
-    [os.remove(fn) for fn in tmp_fastqs]
-    [os.remove(fn) for fn in tmp_filt_fastqs]
+    pysam.sort("-@", str(args.threads), "-o", args.output, tmp_bam.name)
+    pysam.index(args.output)
+
+    logger.info("Cleaning up temporary files")
     shutil.rmtree(args.tempdir)
 
 
