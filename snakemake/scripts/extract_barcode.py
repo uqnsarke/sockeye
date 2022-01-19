@@ -1,4 +1,5 @@
 import argparse
+import collections
 import gzip
 import logging
 import mmap
@@ -12,7 +13,7 @@ import tempfile
 import editdistance as ed
 import numpy as np
 import parasail
-from Bio import SeqIO
+import pysam
 from Bio.Seq import Seq
 from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
@@ -33,9 +34,8 @@ def parse_args():
 
     # Positional mandatory arguments
     parser.add_argument(
-        "fastq",
-        help="FASTQ file of stranded sequencing reads (gzipped ending in *.fastq.gz \
-        or *.fq.gz supported)",
+        "bam",
+        help="Sorted BAM file of stranded sequencing reads aligned to a reference",
         type=str,
     )
 
@@ -143,19 +143,19 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--output_reads",
-        help="Output FASTQ file containing stranded reads with uncorrected barcodes \
-        in the read header [reads.bc_uncorr.fastq]",
+        "--output_bam",
+        help="Output BAM file containing aligned reads with uncorrected barcodes \
+        in the read ID [bc_uncorr.sorted.bam]",
         type=str,
-        default="reads.bc_uncorr.fastq",
+        default="bc_uncorr.sorted.bam",
     )
 
     parser.add_argument(
-        "--output_hq_bc",
-        help="Output FASTA file containing high-quality barcode entries \
-        [bc_uncorr.hq.fasta]",
+        "--output_barcodes",
+        help="Output TSV file containing high-quality barcode counts \
+        [barcodes_counts.tsv]",
         type=str,
-        default="bc_uncorr.hq.fasta",
+        default="barcodes_counts.tsv",
     )
 
     parser.add_argument(
@@ -177,7 +177,7 @@ def parse_args():
     args = parser.parse_args()
 
     # Create temp dir and add that to the args object
-    p = pathlib.Path(args.output_reads)
+    p = pathlib.Path(args.output_bam)
     output_dir = p.parents[0]
     tempdir = tempfile.TemporaryDirectory(prefix="tmp.", dir=output_dir)
     args.tempdir = tempdir.name
@@ -290,6 +290,30 @@ def edit_distance(query, target):
     return d
 
 
+def parse_probe_alignment(alignment, read1_probe_seq):
+    """ """
+    # Find the position of the Ns in the alignment. These correspond
+    # to the cell barcode + UMI sequences bound by the read1 and polyT
+    idxs = list(find("N", alignment.traceback.ref))
+    if len(idxs) > 0:
+        # The Ns in the probe successfully aligned to sequence
+        bc_start = min(idxs)
+
+        # The read1 adapter comprises the first part of the alignment
+        read1 = alignment.traceback.query[0:bc_start]
+        read1_ed = edit_distance(read1, read1_probe_seq)
+
+        # The barcode + UMI sequences in the read correspond to the
+        # positions of the aligned Ns in the probe sequence
+        barcode = alignment.traceback.query[bc_start : (bc_start + args.barcode_length)]
+    else:
+        # No Ns in the probe successfully aligned -- ignore this read
+        read1_ed = len(read1_probe_seq)
+        barcode = ""
+
+    return read1_ed, barcode, bc_start
+
+
 def align_adapter(tup):
     """
     Aligns a single adapter template to the read an computes the
@@ -303,43 +327,18 @@ def align_adapter(tup):
         (bc_qv) added to the read header
     :rtype: class 'Bio.SeqRecord.SeqRecord'
     """
-    fastq_entry = tup[0]
-    args = tup[1]
 
-    read_id = fastq_entry.id
-    read_seq = str(fastq_entry.seq)
-    read_qv = fastq_entry.letter_annotations["phred_quality"]
+    bam_path = tup[0]
+    chrom = tup[1]
+    args = tup[2]
 
-    def create_fasta_entry(barcode, read_id, read1_ed, bc_qv):
-        """
-        Create a Biopython FASTA SeqRecord using the supplied sequence info
-
-        :param barcode: Nucleotide sequence of the identified (uncorrected) cell barcode
-        :type barcode: str
-        :param read_id: Read ID
-        :type read_id: str
-        :param read1_ed: Levenshtein distance between expected and observed read1
-            adapter sequence
-        :type read1_ed: int
-        :param bc_qv: Mean quality value for positions corresponding to the identified
-            cell barcode
-        :type bc_qv: float
-        :return: Biopython FASTA Seq record containing the identified (uncorrected)
-            cell barcode sequence
-        :rtype: class 'Bio.SeqRecord.SeqRecord'
-        """
-        fasta_entry = SeqRecord(
-            Seq(barcode),
-            id=read_id,
-            description="read1_ed={} bc_qv={:.1f}".format(read1_ed, np.mean(bc_qv)),
-        )
-        return fasta_entry
-
+    # Build align matrix and define the probe sequence for alignments
     matrix = update_matrix(args)
+    parasail_alg = parasail.sw_trace
 
     # Use only the specified suffix length of the read1 adapter
     read1_probe_seq = args.read1_adapter[-args.read1_suff_length :]
-    # Compile the actual query sequence of <read1_suffix>NNN...NNN<TTTTT....>
+    # Compile the actual probe sequence of <read1_suffix>NNN...NNN<TTTTT....>
     probe_seq = "{r}{bc}{umi}{pT}".format(
         r=read1_probe_seq,
         bc="N" * args.barcode_length,
@@ -347,144 +346,70 @@ def align_adapter(tup):
         pT="T" * args.polyT_length,
     )
 
-    prefix_seq = read_seq[: args.window]
-    prefix_qv = read_qv[: args.window]
+    bam = pysam.AlignmentFile(bam_path, "rb")
 
-    parasail_alg = parasail.sw_trace
-
-    alignment = parasail_alg(
-        s1=prefix_seq,
-        s2=probe_seq,
-        open=args.gap_open,
-        extend=args.gap_extend,
-        matrix=matrix,
+    # Write output BAM file
+    suff = f".{chrom}.bam"
+    chrom_bam = tempfile.NamedTemporaryFile(
+        prefix="tmp.align.", suffix=suff, dir=args.tempdir, delete=False
     )
+    bam_out = pysam.AlignmentFile(chrom_bam.name, "wb", template=bam)
 
-    # Find the position of the Ns in the alignment. These correspond
-    # to the cell barcode + UMI sequences bound by the read1 and polyT
-    idxs = list(find("N", alignment.traceback.ref))
-    if len(idxs) > 0:
-        # The Ns in the probe successfully aligned to sequence
-        bc_start = min(idxs)
-        umi_end = max(idxs)
+    chrom_barcode_counts = collections.Counter()
+    for align in bam.fetch(contig=chrom):
+        read_id = align.query_name.split(" ")[0]
+        prefix_seq = align.query_sequence[: args.window]
+        prefix_qv = align.query_qualities[: args.window]
 
-        # The read1 adapter comprises the first part of the alignment
-        read1 = alignment.traceback.query[0:bc_start]
-        read1_ed = edit_distance(read1, read1_probe_seq)
-
-        # The barcode + UMI sequences in the read correspond to the
-        # positions of the aligned Ns in the probe sequence
-        barcode_umi = alignment.traceback.query[bc_start : umi_end + 1]
-        barcode_only = alignment.traceback.query[
-            bc_start : (bc_start + args.barcode_length)
-        ]
-    else:
-        # No Ns in the probe successfully aligned -- ignore this read
-        read1_ed = len(read1_probe_seq)
-        barcode_umi = ""
-        barcode_only = ""
-
-    barcode_umi = barcode_umi.strip("-")
-
-    # Require minimal read1 edit distance and require perfect barcode length
-    condition1 = read1_ed <= args.max_read1_ed
-    ##########################
-    # TO-DO: can we be more flexible about barcode length?
-    ##########################
-    condition2 = len(barcode_only.strip("-")) == args.barcode_length
-
-    if condition1 and condition2:
-        start_idx = prefix_seq.find(barcode_umi)
-        bc_qv = prefix_qv[start_idx : (start_idx + args.barcode_length + 1)]
-
-        # print(read_id)
-        # print(alignment.traceback.ref)
-        # print(alignment.traceback.comp)
-        # print(alignment.traceback.query)
-        # print()
-
-        fasta_entry = create_fasta_entry(barcode_only, read_id, read1_ed, bc_qv)
-        fastq_entry.description = "{} bc_uncorr={} bc_qv={:.2f}".format(
-            fastq_entry.id, barcode_only, np.mean(bc_qv)
+        alignment = parasail_alg(
+            s1=prefix_seq,
+            s2=probe_seq,
+            open=args.gap_open,
+            extend=args.gap_extend,
+            matrix=matrix,
         )
-    else:
-        fasta_entry = None
-        fastq_entry = None
 
-    return fasta_entry, fastq_entry
+        read1_ed, barcode, bc_start = parse_probe_alignment(alignment, read1_probe_seq)
 
+        # Require minimal read1 edit distance and require perfect barcode length
+        condition1 = read1_ed <= args.max_read1_ed
+        ##########################
+        # TO-DO: can we be more flexible about barcode length?
+        ##########################
+        condition2 = len(barcode.strip("-")) == args.barcode_length
 
-def launch_alignment_pool(batch, args):
-    """
-    First builds a list of tuples (<func_args>), where each tuple contains the
-    arguments required by the function that is being executed by the
-    multiprocessing pool. Then launch the pool and return the results.
+        if condition1 and condition2:
+            bc_qv = np.mean(prefix_qv[bc_start : (bc_start + args.barcode_length + 1)])
+            chrom_barcode_counts[barcode] += 1
 
-    :param batch: List of FASTQ SeqRecord entries batched from the input FASTQ file
-    :type batch: list
-    :param args: object containing all supplied arguments
-    :type args: class argparse.Namespace
-    :return: List of Biopython FASTA Seq records containing identified
-        (uncorrected) cell barcode sequences and List of Biopython FASTQ Seq
-        records containing the reads with the identified cell barcode
-        (bc_uncorr) and barcode mean quality value (bc_qv) added to the read
-        headers
-    :rtype: list
-    """
-    func_args = []
+            # Corrected cell barcode = CB:Z
+            align.set_tag("CB", barcode, value_type="Z")
+            # Cell barcode quality score = CY:Z
+            align.set_tag("CY", "{:.2f}".format(bc_qv), value_type="Z")
 
-    for r in batch:
-        if len(str(r.seq)) > 0:
-            func_args.append((r, args))
+            # print(read_id)
+            # print(alignment.traceback.ref)
+            # print(alignment.traceback.comp)
+            # print(alignment.traceback.query)
+            # print()
 
-    results = launch_pool(align_adapter, func_args, args.threads)
-    fasta_entries, fastq_entries = list(zip(*results))
-    return fasta_entries, fastq_entries
+        else:
+            # Corrected cell barcode = CB:Z
+            align.set_tag("CB", "X" * args.barcode_length, value_type="Z")
+            # Cell barcode quality score = CY:Z
+            align.set_tag("CY", "0.0", value_type="Z")
 
+            print(read_id)
+            print(alignment.traceback.ref)
+            print(alignment.traceback.comp)
+            print(alignment.traceback.query)
+            print()
 
-def check_input_format(input_file):
-    """
-    Check that the input is a FASTQ file by just reading the first line.
+        bam_out.write(align)
 
-    :param input_file: Filename to check
-    :type input_file: str
-    """
-    f = open_fastq(input_file)
-    line = f.readline()
+    bam_out.close()
 
-    if line[0] == "@":
-        pass
-    else:
-        raise ("Unexpected file type! Check your FASTQ file.")
-
-
-def batch_iterator(iterator, batch_size):
-    """
-    Returns lists of length batch_size.
-
-    This can be used on any iterator, for example to batch up
-    SeqRecord objects from Bio.SeqIO.parse(...), or to batch
-    Alignment objects from Bio.AlignIO.parse(...), or simply
-    lines from a file handle.
-
-    This is a generator function, and it returns lists of the
-    entries from the supplied iterator.  Each list will have
-    batch_size entries, although the final list may be shorter.
-    """
-    entry = True  # Make sure we loop once
-    while entry:
-        batch = []
-        while len(batch) < batch_size:
-            try:
-                entry = next(iterator)
-            except StopIteration:
-                entry = None
-            if entry is None:
-                # End of file
-                break
-            batch.append(entry)
-        if batch:
-            yield batch
+    return chrom_bam.name, chrom_barcode_counts
 
 
 def load_superlist(superlist):
@@ -513,138 +438,63 @@ def load_superlist(superlist):
     return wl
 
 
-def open_fastq(fastq):
+def get_bam_info(bam):
     """
-    Open the supplied FASTQ file, depending on whether it is gzipped or uncompressed
+    Use `samtools idxstat` to get number of alignments and names of all contigs
+    in the reference.
 
-    :param fastq: Path to supplied FASTQ file
-    :type fastq: str
-    :return: File handle for FASTQ file
-    :rtype: class '_io.TextIOWrapper'
+    :param bam: Path to sorted BAM file
+    :type bame: str
+    :return: Sum of all alignments in the BAM index file and list of all chroms
+    :rtype: int,list
     """
-    ext = pathlib.Path(fastq).suffix
-    if ext == ".gz":
-        f = gzip.open(fastq, "rt")
-    else:
-        f = open(fastq, "r+")
-    return f
-
-
-def count_reads(fastq):
-    """
-    Get the number of reads from a FASTQ file. Does this by simply dividing the
-    number of lines in the file by four.
-
-    :param fastq: Path to supplied FASTQ file
-    :type fastq: str
-    :return: Number of reads in FASTQ file
-    :rtype: int
-    """
-    n_lines = 0
-    fn = pathlib.Path(fastq).name
-    with open_fastq(fastq) as f:
-        for line in tqdm(
-            f, desc=f"Counting reads in {fn}", unit_scale=0.25, unit=" reads"
-        ):
-            n_lines += 1
-    n_reads = int(n_lines / 4)
-    return n_reads
-
-
-def write_tmp_files(fasta_entries, fastq_entries, wl, args):
-    """
-    Write temporary files for each batch of reads. Each batch will generate
-    (1) a temporary FASTQ of reads with the barcode info in the read headers,
-    (2) a temporary FASTA of the uncorrected cell barcode found in each read.
-
-    :param fasta_entries: List of Biopython FASTA Seq records containing
-        identified (uncorrected) cell barcode sequences
-    :type fasta_entries: list
-    :param fastq_entries: List of Biopython FASTQ Seq records containing the
-        reads with the identified cell barcode (bc_uncorr) and barcode mean
-        quality value (bc_qv) added to the read headers
-    :type fastq_entries: list
-    :param wl:
-    :type wl: set
-    :param args: object containing all supplied arguments
-    :type args: class argparse.Namespace
-    :return: Path to temporary FASTA file of cell barcodes found in each read
-        and path to temporary FASTQ file of reads with cell barcode info in the
-        read headers
-    :rtype: str
-    """
-    hq_fastas = []
-    for fasta_entry in fasta_entries:
-        if fasta_entry is not None:
-            if fasta_entry.seq in wl:
-                hq_fastas.append(fasta_entry)
-
-    hq_tmp_fasta = tempfile.NamedTemporaryFile(
-        prefix="tmp.hq.bc.", suffix=".fasta", dir=args.tempdir, delete=False
-    )
-    tmp_read_fastq = tempfile.NamedTemporaryFile(
-        prefix="tmp.read.bc_uncorr.", suffix=".fastq", dir=args.tempdir, delete=False
-    )
-    SeqIO.write(hq_fastas, hq_tmp_fasta.name, "fasta")
-    valid_fastq_entries = [entry for entry in fastq_entries if entry is not None]
-    SeqIO.write(valid_fastq_entries, tmp_read_fastq.name, "fastq")
-    hq = hq_tmp_fasta.name
-    read = tmp_read_fastq.name
-    return hq, read
+    bam = pysam.AlignmentFile(bam, "rb")
+    stats = bam.get_index_statistics()
+    n_aligns = int(np.sum([contig.mapped for contig in stats]))
+    chroms = [contig.contig for contig in stats]
+    bam.close()
+    return n_aligns, chroms
 
 
 def main(args):
     init_logger(args)
-    check_input_format(args.fastq)
-    n_reads = count_reads(args.fastq)
-    n_batches = int(np.ceil(n_reads / args.batch_size))
+    n_reads, chroms = get_bam_info(args.bam)
 
     # logger.info("Loading barcode superlist")
     wl = load_superlist(args.superlist)
-
-    f = open_fastq(args.fastq)
-    record_iter = SeqIO.parse(f, "fastq")
-
-    logger.info(
-        f"Processing {n_reads} total reads in {n_batches} batches of "
-        f"{args.batch_size} reads"
-    )
 
     # Create temporary directory
     if os.path.exists(args.tempdir):
         shutil.rmtree(args.tempdir)
     os.mkdir(args.tempdir)
 
-    # Process reads from the FASTQ file in batches to manage memory usage
-    tmp_read_fastqs = []
-    tmp_hq_fastas = []
-    batches = batch_iterator(record_iter, args.batch_size)
-    for batch in tqdm(batches, total=n_batches):
+    # Process BAM alignments from each chrom separately
+    func_args = []
+    for chrom in chroms:
+        func_args.append((args.bam, chrom, args))
 
-        fasta_entries, fastq_entries = launch_alignment_pool(batch, args)
-        hq_tmp_fasta, tmp_read_fastq = write_tmp_files(
-            fasta_entries, fastq_entries, wl, args
-        )
-        tmp_read_fastqs.append(tmp_read_fastq)
-        tmp_hq_fastas.append(hq_tmp_fasta)
+    results = launch_pool(align_adapter, func_args, args.threads)
+    chrom_bam_fns, chrom_barcode_counts = list(zip(*results))
+    barcode_counts = sum(chrom_barcode_counts, collections.Counter())
+
+    # Filter barcode counts against barcode superlist
+    logger.info(f"Writing superlist-filtered barcode counts to {args.output_barcodes}")
+    f_barcode_counts = open(args.output_barcodes, "w")
+    barcode_counts_sorted = sorted(
+        barcode_counts.items(), key=lambda item: item[1], reverse=True
+    )
+    for barcode, n in barcode_counts_sorted:
+        if barcode in wl:
+            f_barcode_counts.write(f"{barcode}\t{n}\n")
+    f_barcode_counts.close()
 
     logger.info(
-        f"Writing reads with putative barcodes in header to {args.output_reads}"
+        f"Writing BAM with uncorrected barcodes in read ID to {args.output_bam}"
     )
-    with open(args.output_reads, "wb") as f_out:
-        for tmp_fastq in tmp_read_fastqs:
-            with open(tmp_fastq, "rb") as f_:
-                shutil.copyfileobj(f_, f_out)
-
-    logger.info(f"Writing superlist-filtered putative barcodes to {args.output_hq_bc}")
-    with open(args.output_hq_bc, "wb") as f_out:
-        for tmp_fasta in tmp_hq_fastas:
-            with open(tmp_fasta, "rb") as f_:
-                shutil.copyfileobj(f_, f_out)
+    merge_parameters = ["-f", args.output_bam] + list(chrom_bam_fns)
+    pysam.merge(*merge_parameters)
 
     logger.info("Cleaning up temporary files")
-    [os.remove(fn) for fn in tmp_read_fastqs]
-    [os.remove(fn) for fn in tmp_hq_fastas]
     shutil.rmtree(args.tempdir)
 
 
