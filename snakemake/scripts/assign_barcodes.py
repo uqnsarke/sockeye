@@ -161,14 +161,22 @@ def init_logger(args):
     logging_level = args.verbosity * 10
     logging.root.setLevel(logging_level)
     logging.root.handlers[0].addFilter(lambda x: "NumExpr" not in x.msg)
-    # progress = tqdm if logging_level <= 20 else None
-    # logger.info(f'Generated {len(df_bcs)} barcodes of length {n}')
-    # logger.warning('!! Failures detected !!')
 
 
-def find(target, myList):
-    for i in range(len(myList)):
-        if myList[i] == target:
+def find(target, my_string):
+    """
+    Return indices corresponding to the positions of <target> in <my_string>.
+
+    :param target: character to search for in <my_string>
+    :type target: str
+    :param my_string: string to search for <target>
+    :type my_string: str
+    :return: generator returning indices corresponding to the position(s) of
+        <target> in <my_string>
+    :rtype: int
+    """
+    for i in range(len(my_string)):
+        if my_string[i] == target:
             yield i
 
 
@@ -176,8 +184,11 @@ def update_matrix(args):
     """
     Create new parasail scoring matrix. 'N' is used as wildcard character
     for barcodes and has its own match parameter (0 per default).
-    :return: args: arguments
-    :rtype args, args
+
+    :param args: object containing all supplied arguments
+    :type args: class argparse.Namespace
+    :return: custom parasail alignment matrix
+    :rtype: parasail.bindings_v2.Matrix
     """
     matrix = parasail.matrix_create("ACGTN", args.match, args.mismatch)
 
@@ -206,8 +217,16 @@ def update_matrix(args):
 
 def calc_ed_with_whitelist(bc_uncorr, whitelist):
     """
-    Find minimum and runner-up barcode edit distance by
-    iterating through the whitelist of expected barcodes
+    Find minimum and runner-up barcode edit distance by iterating through the
+    whitelist of expected barcodes.
+
+    :param bc_uncorr: Uncorrected cell barcode
+    :type bc_uncorr: str
+    :param whitelist: Filtered whitelist of cell barcodes
+    :type whitelist: list
+    :return: Corrected barcode assignment, edit distance, and difference in edit
+        distance between the top match and the next closest match
+    :rtype: str, int, int
     """
     bc_match = "X" * len(bc_uncorr)
     bc_match_ed = len(bc_uncorr)
@@ -229,11 +248,11 @@ def parse_probe_alignment(p_alignment, align, prefix_seq, prefix_qv):
     values as tags to the BAM alignment.
 
     :param p_alignment: parasail alignment
-    :type p_alignment:
+    :type p_alignment: class 'parasail.bindings_v2.Result'
     :param align: pysam BAM alignment
-    :type align:
+    :type align: class 'pysam.libcalignedsegment.AlignedSegment'
     :return: pysam BAM alignment with the UR and UY tags added
-    :rtype:
+    :rtype: class 'pysam.libcalignedsegment.AlignedSegment'
     """
     # Find the position of the Ns in the parasail alignment. These correspond
     # to the UMI sequences bound by the cell barcode and polyT
@@ -245,9 +264,9 @@ def parse_probe_alignment(p_alignment, align, prefix_seq, prefix_qv):
         start_idx = prefix_seq.find(umi)
         umi_qv = np.mean(prefix_qv[start_idx : (start_idx + len(umi))])
 
-        # print(alignment.traceback.ref)
-        # print(alignment.traceback.comp)
-        # print(alignment.traceback.query)
+        # print(p_alignment.traceback.ref)
+        # print(p_alignment.traceback.comp)
+        # print(p_alignment.traceback.query)
         # print()
 
         # Uncorrected UMI = UR:Z
@@ -265,12 +284,12 @@ def get_uncorrected_umi(align, args):
     UMI positions. Extract those bases and consider those to be the uncorrected
     UMI sequence.
 
-    :param align:
-    :type align:
-    :param args:
-    :type args:
-    :return:
-    :rtype:
+    :param align: pysam BAM alignment with the CB tag
+    :type align: class 'pysam.libcalignedsegment.AlignedSegment'
+    :param args: object containing all supplied arguments
+    :type args: class 'argparse.Namespace'
+    :return: pysam BAM alignment with the UR and UY tags added
+    :rtype: class 'pysam.libcalignedsegment.AlignedSegment'
     """
     prefix_seq = align.get_forward_sequence()[: args.window]
     prefix_qv = align.get_forward_qualities()[: args.window]
@@ -310,10 +329,10 @@ def process_bam_records(tup):
     1. Calculate edit distance between uncorrected barcode and barcodes in whitelist
     2.
 
-    :param tup:
+    :param tup: Tuple containing the input arguments
     :type tup: tup
-    :return:
-    :rtype:
+    :return: Path to a temporary BAM file
+    :rtype: str
     """
     input_bam = tup[0]
     chrom = tup[1]
@@ -341,7 +360,7 @@ def process_bam_records(tup):
         bc_uncorr = align.get_tag("CR")
 
         # Decompose uncorrected barcode into N k-mers
-        bc_uncorr_kmers = split_barcode_into_kmers(bc_uncorr, args.k)
+        bc_uncorr_kmers = split_seq_into_kmers(bc_uncorr, args.k)
         # Filter the whitelist to only those with at least one of the k-mers
         # from the uncorrected barcode
         filt_whitelist = filter_whitelist_by_kmers(
@@ -403,6 +422,16 @@ def filter_whitelist_by_kmers(wl, kmers, kmer_to_bc_index):
     Given a list of whitelisted barcodes, return just the
     subset that contain any of the kmers contained in the
     query barcode.
+
+    :param wl: Full barcode whitelist
+    :type wl: list
+    :param kmers: K-mers to use for whitelist filtering
+    :type kmers: list
+    :param kmer_to_bc_index: Map of k-mers to the whitelist indices corresponding
+        to all barcodes containing that k-mer
+    :type kmer_to_bc_index: dict
+    :return: List of filtered barcodes
+    :rtype: list
     """
     # collect sets of indices that each kmer points to
     id_sets = [
@@ -415,15 +444,39 @@ def filter_whitelist_by_kmers(wl, kmers, kmer_to_bc_index):
     return filt_wl
 
 
-def split_barcode_into_kmers(bc, k):
+def split_seq_into_kmers(seq, k):
+    """
+    Decompose the supplied <seq> into N=len(seq)-k+1 k-mers.
+
+    :param seq: String of nucleotides
+    :type seq: str
+    :param k: k-mer length
+    :type k: int
+    :return: List of k-mers
+    :rtype: list
+    """
+    assert len(seq) > k, "Pick a value for k that is less than len(barcode)"
+
     kmers = []
-    for i in range(0, len(bc) - k + 1):
-        kmer = bc[i : i + k]
+    for i in range(0, len(seq) - k + 1):
+        kmer = seq[i : i + k]
         kmers.append(kmer)
     return kmers
 
 
 def load_whitelist(whitelist, k=5):
+    """
+    Read in barcode whitelist and create dictionary mapping each k-mer to all
+    barcodes in the whitelist containing that k-mer.
+
+    :param whitelist: Path to the barcode whitelist
+    :type whitelist: str
+    :param k: k-mer length
+    :type k: int
+    :return: List of whitelisted barcodes and dictionary mapping all k-mers to
+        indices in the whitelist corresponding to barcodes containing that k-mer
+    :rtype: list, dict
+    """
     wl = []
     with open(whitelist) as file:
         for line in file:
@@ -433,7 +486,7 @@ def load_whitelist(whitelist, k=5):
     wl.sort()
     kmer_to_bc_index = {}
     for index, bc in enumerate(wl):
-        bc_kmers = split_barcode_into_kmers(bc, k)
+        bc_kmers = split_seq_into_kmers(bc, k)
         for bc_kmer in bc_kmers:
             if bc_kmer not in kmer_to_bc_index.keys():
                 kmer_to_bc_index[bc_kmer] = set([index])
