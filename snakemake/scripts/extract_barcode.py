@@ -300,6 +300,7 @@ def parse_probe_alignment(alignment, read1_probe_seq, args):
         # No Ns in the probe successfully aligned -- ignore this read
         read1_ed = len(read1_probe_seq)
         barcode = ""
+        bc_start = 0
 
     return read1_ed, barcode, bc_start
 
