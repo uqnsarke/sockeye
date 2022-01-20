@@ -343,6 +343,7 @@ def process_bam_records(tup):
     whitelist, kmer_to_bc_index = load_whitelist(args.whitelist, args.k)
 
     # Open input BAM file
+    pysam.index(input_bam)
     bam = pysam.AlignmentFile(input_bam, "rb")
 
     # Open temporary output BAM file for writing
@@ -506,6 +507,7 @@ def get_bam_info(bam):
     :return: Sum of all alignments in the BAM index file and list of all chroms
     :rtype: int,list
     """
+    pysam.index(bam)
     bam = pysam.AlignmentFile(bam, "rb")
     stats = bam.get_index_statistics()
     n_aligns = int(np.sum([contig.mapped for contig in stats]))
@@ -518,6 +520,7 @@ def get_bam_info(bam):
 
 def main(args):
     init_logger(args)
+    logger.info("Getting BAM statistics")
     n_reads, chroms = get_bam_info(args.bam)
 
     # Create temporary directory

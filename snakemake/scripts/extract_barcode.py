@@ -335,6 +335,7 @@ def align_adapter(tup):
         pT="T" * args.polyT_length,
     )
 
+    pysam.index(bam_path)
     bam = pysam.AlignmentFile(bam_path, "rb")
 
     # Write output BAM file
@@ -430,6 +431,7 @@ def get_bam_info(bam):
     :return: Sum of all alignments in the BAM index file and list of all chroms
     :rtype: int,list
     """
+    pysam.index(bam)
     bam = pysam.AlignmentFile(bam, "rb")
     stats = bam.get_index_statistics()
     n_aligns = int(np.sum([contig.mapped for contig in stats]))
@@ -442,6 +444,7 @@ def get_bam_info(bam):
 
 def main(args):
     init_logger(args)
+    logger.info("Getting BAM statistics")
     n_reads, chroms = get_bam_info(args.bam)
 
     # logger.info("Loading barcode superlist")
