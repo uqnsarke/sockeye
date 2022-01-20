@@ -19,17 +19,27 @@ def parse_args():
     # Positional mandatory arguments
     parser.add_argument(
         "bam",
-        help="BAM file of alignments with tags for gene, corrected barcode and \
-        uncorrected UMI",
+        help="BAM file of alignments with tags for gene (GN), corrected barcode \
+        (CB) and uncorrected UMI (UY)",
         type=str,
     )
 
     # Optional arguments
     parser.add_argument(
         "--output",
-        help="Output BAM file with new tags for corrected UMI (UB:Z) [tagged.sorted.bam]",
+        help="Output BAM file with new tags for corrected UMI (UB) \
+        [tagged.sorted.bam]",
         type=str,
         default="tagged.sorted.bam",
+    )
+
+    parser.add_argument(
+        "-i",
+        "--ref_interval",
+        help="Size of genomic window (bp) to assign as gene name if no gene \
+        assigned by featureCounts [1000]",
+        type=int,
+        default=1000,
     )
 
     parser.add_argument(
@@ -173,24 +183,23 @@ def correct_umis(umis):
     return umis.replace(umi_map)
 
 
-def add_umi_corr_tag(umis, n_aligns, args):
+def add_tags(umis, genes, n_aligns, args):
     bam = pysam.AlignmentFile(args.bam, "rb")
-    bam_tagged = pysam.AlignmentFile(args.output, "wb", template=bam)
+    bam_out = pysam.AlignmentFile(args.output, "wb", template=bam)
 
-    logger.info(f"Writing corrected UMI tags (UB:Z) into {args.output}")
     for i, align in enumerate(tqdm(bam.fetch(), total=n_aligns)):
         read_id = align.query_name
-        if umis.get(read_id):
-            # Read has an annotated gene, barcode and corrected UMI
-            align.set_tag("UB", umis[read_id], value_type="Z")
-        else:
-            # Read probably has no annotated gene (gene name = NA)
-            align.set_tag("UB", "XXXXXXXXX", value_type="Z")
 
-        bam_tagged.write(align)
+        # Corrected UMI = UB:Z
+        align.set_tag("UB", umis[read_id], value_type="Z")
+
+        # Annotated gene name = GN:Z
+        align.set_tag("GN", genes[read_id], value_type="Z")
+
+        bam_out.write(align)
 
     bam.close()
-    bam_tagged.close()
+    bam_out.close()
 
 
 def count_bam_entries(bam):
@@ -213,24 +222,39 @@ def read_bam(args):
 
     logger.info(f"Reading read / barcode / UMI info from {args.bam}")
     records = []
-    for i, align in enumerate(tqdm(bam.fetch(), total=n_aligns)):
+    for align in tqdm(bam.fetch(), total=n_aligns):
+        read_id = align.query_name
+
+        # Corrected cell barcode = CB:Z
+        bc_corr = align.get_tag("CB")
+
+        # Uncorrected UMI = UR:Z
+        umi_uncorr = align.get_tag("UR")
+
         # Annotated gene name = GN:Z
         gene = align.get_tag("GN")
-        if gene != "NA":
-            read_id = align.query_name
-            # Corrected cell barcode = CB:Z
-            bc_corr = align.get_tag("CB")
-            # Uncorrected UMI = UR:Z
-            umi_uncorr = align.get_tag("UR")
-            # UMI quality score = UY:Z
-            # umi_qv = align.get_tag("UY")
 
-            records.append((read_id, gene, bc_corr, umi_uncorr))
+        if gene == "NA":
+            # Group by region if no gene annotation
+            chrom = align.reference_name
+            start_pos = align.get_reference_positions()[0]
+            end_pos = align.get_reference_positions()[-1]
+
+            # Find the midpoint of the alignment
+            midpoint = int((start_pos + end_pos) / 2)
+
+            # Pick the genomic interval based on this alignment midpoint
+            interval_start = np.floor(midpoint / args.ref_interval) * args.ref_interval
+            interval_end = np.ceil(midpoint / args.ref_interval) * args.ref_interval
+
+            # New 'gene name' will be <chr>_<interval_start>_<interval_end>
+            gene = f"{chrom}_{int(interval_start)}_{int(interval_end)}"
+
+        records.append((read_id, gene, bc_corr, umi_uncorr))
 
     df = pd.DataFrame.from_records(
         records, columns=["read_id", "gene", "bc", "umi_uncorr"]
     )
-
     bam.close()
 
     return df, n_aligns
@@ -241,15 +265,22 @@ def main(args):
 
     df, n_aligns = read_bam(args)
 
+    logger.info("Correcting UMIs grouping by gene and corrected barcode")
     # Cluster UMIs that have been grouped by gene and cell barcode
     df["umi_corr"] = df.groupby(["gene", "bc"])["umi_uncorr"].apply(correct_umis)
 
     # Simplify to a read_id:umi_corr dictionary
-    df = df.drop(["gene", "bc", "umi_uncorr"], axis=1).set_index("read_id")
-    umis = df.to_dict()["umi_corr"]
+    df = df.drop(["bc", "umi_uncorr"], axis=1).set_index("read_id")
 
+    # Dict of corrected UMI for each read ID
+    umis = df.to_dict()["umi_corr"]
+    # Dict of gene names to add <chr>_<start>_<end> in place of NA
+    genes = df.to_dict()["gene"]
+
+    logger.info(f"Writing corrected UMI tags (UB) into {args.output}")
     # Add corrected UMIs to each BAM entry via the UB:Z tag
-    add_umi_corr_tag(umis, n_aligns, args)
+    add_tags(umis, genes, n_aligns, args)
+    pysam.index(args.output)
 
 
 if __name__ == "__main__":

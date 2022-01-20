@@ -1,6 +1,6 @@
 rule ont_featureCounts_genes:
     input:
-        bam=BAM_SORT,
+        bam=BAM_BC_CORR_UMI_UNCORR,
     output:
         featureCounts=temp(FC_READ_ASSIGNS_TMP),
         featureCounts_final=FC_READ_ASSIGNS,
@@ -29,18 +29,16 @@ rule ont_featureCounts_genes:
         "&& cp {output.featureCounts} {output.featureCounts_final}"
 
 
-rule add_gene_bc_umi_tags_to_bam:
+rule add_gene_tags_to_bam:
     input:
-        bam=BAM_SORT,
-        fastq=UMI_EXTRACTED_READS,
+        bam=BAM_BC_CORR_UMI_UNCORR,
         fc=FC_READ_ASSIGNS,
     output:
-        bam=temp(UMI_UNCORR_TAGGED_BAM),
-        bai=temp(UMI_UNCORR_TAGGED_BAM_BAI),
+        bam=temp(BAM_BC_CORR_UMI_UNCORR_GENE),
+        bai=temp(BAM_BC_CORR_UMI_UNCORR_GENE_BAI),
     conda:
         "../envs/umis.yml"
     shell:
-        "python {SCRIPT_DIR}/add_gene_bc_umi_tags.py "
+        "python {SCRIPT_DIR}/add_gene_tags.py "
         "--output {output.bam} "
-        "{input.bam} {input.fastq} {input.fc}; "
-        "samtools index {output.bam}"
+        "{input.bam} {input.fc}"

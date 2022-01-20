@@ -20,7 +20,7 @@ rule get_chrom_sizes:
 
 rule align_to_ref:
     input:
-        fastq=UMI_EXTRACTED_READS,
+        fastq=STRANDED_FQ,
         bed=REF_GENES_BED,
         chrom_sizes=REF_CHROM_SIZES,
     output:

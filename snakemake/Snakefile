@@ -37,26 +37,6 @@ CONFIG_STATS = str(ADAPTERS_DIR / "configs.stats.json")
 
 
 ###################
-# BARCODE DEMUX FILES
-###################
-DEMUX_DIR = OUTPUT_BASE / "{run_id}" / "barcodes"
-BARCODES_UNCORR_READS = str(DEMUX_DIR / "reads.bc_uncorr.fastq")
-BARCODES_HQ = str(DEMUX_DIR / "uncorr.hq.fasta")
-BARCODES_CLUSTERS = str(DEMUX_DIR / "clusters.fasta")
-BARCODES_WHITELIST = str(DEMUX_DIR / "whitelist.tsv")
-BARCODES_KNEEPLOT = str(DEMUX_DIR / "kneeplot.png")
-BARCODES_CORR_READS = str(DEMUX_DIR / "reads.bc_corr.fastq")
-BARCODES_CORR_READS_FILTERED = str(DEMUX_DIR / "reads.bc_corr.filt.fastq")
-
-
-###################
-# UMI DEMUX FILES
-###################
-UMI_DIR = OUTPUT_BASE / "{run_id}" / "umis"
-UMI_EXTRACTED_READS = str(UMI_DIR / "reads.bc.umi.fastq")
-
-
-###################
 # REF ALIGN FILES
 ###################
 REF_GENES_GTF = pathlib.Path(config["REF_GTF"])
@@ -70,19 +50,35 @@ BAM_SORT = str(ALIGN_DIR / "sorted.bam")
 
 
 ###################
-# OUTPUT BAM FILES
+# BARCODE DEMUX FILES
 ###################
-UMI_UNCORR_TAGGED_BAM = str(UMI_DIR / "umi_uncorr.sorted.bam")
-UMI_UNCORR_TAGGED_BAM_BAI = str(UMI_DIR / "umi_uncorr.sorted.bam.bai")
-TAGGED_BAM = str(UMI_DIR / "tagged.sorted.bam")
-TAGGED_BAM_BAI = str(UMI_DIR / "tagged.sorted.bam.bai")
+DEMUX_DIR = OUTPUT_BASE / "{run_id}" / "barcodes"
+BAM_BC_UNCORR = str(DEMUX_DIR / "bc_uncorr.sorted.bam")
+BARCODE_COUNTS = str(DEMUX_DIR / "barcode_counts.tsv")
+BARCODE_CLUSTERS = str(DEMUX_DIR / "clusters.fasta")
+BARCODE_WHITELIST = str(DEMUX_DIR / "whitelist.tsv")
+BARCODE_KNEEPLOT = str(DEMUX_DIR / "kneeplot.png")
+BAM_BC_CORR_UMI_UNCORR = str(DEMUX_DIR / "bc_corr.umi_uncorr.sorted.bam")
+BAM_BC_CORR_UMI_UNCORR_GENE = str(DEMUX_DIR / "bc_corr.umi_uncorr.gene.sorted.bam")
+BAM_BC_CORR_UMI_UNCORR_GENE_BAI = str(
+    DEMUX_DIR / "bc_corr.umi_uncorr.gene.sorted.bam.bai"
+)
+BAM_BC_CORR_UMI_CORR_GENE = str(DEMUX_DIR / "bc_corr.umi_corr.gene.sorted.bam")
+BAM_BC_CORR_UMI_CORR_GENE_BAI = str(DEMUX_DIR / "bc_corr.umi_corr.gene.sorted.bam.bai")
+
+
+###################
+# UMI DEMUX FILES
+###################
+UMI_DIR = OUTPUT_BASE / "{run_id}" / "umis"
+UMI_EXTRACTED_READS = str(UMI_DIR / "reads.bc.umi.fastq")
 
 
 ###################
 # FEATURECOUNTS FILES
 ###################
 FC_DIR = OUTPUT_BASE / "{run_id}" / "features"
-FC_READ_ASSIGNS_TMP = str(FC_DIR / "sorted.bam.featureCounts")
+FC_READ_ASSIGNS_TMP = str(FC_DIR / "bc_corr.umi_uncorr.sorted.bam.featureCounts")
 FC_READ_ASSIGNS = str(FC_DIR / "read.gene_assigns.tsv")
 FC_GENES = str(FC_DIR / "gene_assigned")
 FC_SUMMARY = str(FC_DIR / "gene_assigned.summary")
@@ -112,5 +108,5 @@ rule all:
         # expand(BARCODES_CORR_READS_FILTERED, run_id=RUN_IDS),
         # expand(BAM_SORT, run_id=RUN_IDS),
         # expand(FC_SUMMARY, run_id=RUN_IDS),
-        expand(TAGGED_BAM, run_id=RUN_IDS),
+        # expand(BAM_BC_CORR_UMI_CORR_GENE, run_id=RUN_IDS),
         expand(SAT_PLOT, run_id=RUN_IDS),

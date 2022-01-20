@@ -14,8 +14,6 @@ import editdistance as ed
 import numpy as np
 import parasail
 import pysam
-from Bio.Seq import Seq
-from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
 
 # Make logger globally accessible to all functions
@@ -282,7 +280,7 @@ def edit_distance(query, target):
     return d
 
 
-def parse_probe_alignment(alignment, read1_probe_seq):
+def parse_probe_alignment(alignment, read1_probe_seq, args):
     """ """
     # Find the position of the Ns in the alignment. These correspond
     # to the cell barcode + UMI sequences bound by the read1 and polyT
@@ -313,11 +311,9 @@ def align_adapter(tup):
 
     :param tup: Tuple containing the function arguments
     :type tup: tup
-    :return: Biopython FASTA Seq record containing identified (uncorrected) cell
-        barcode sequence and Biopython FASTQ Seq record containing the read with
-        the identified cell barcode (bc_uncorr) and barcode mean quality value
-        (bc_qv) added to the read header
-    :rtype: class 'Bio.SeqRecord.SeqRecord'
+    :return: Path to temporary BAM containing CR and CY tags, plus a counter
+        tracking the number of each barcode that we encounter
+    :rtype: str, class 'collections.Counter'
     """
 
     bam_path = tup[0]
@@ -362,7 +358,9 @@ def align_adapter(tup):
             matrix=matrix,
         )
 
-        read1_ed, barcode, bc_start = parse_probe_alignment(alignment, read1_probe_seq)
+        read1_ed, barcode, bc_start = parse_probe_alignment(
+            alignment, read1_probe_seq, args
+        )
 
         # Require minimal read1 edit distance and require perfect barcode length
         condition1 = read1_ed <= args.max_read1_ed
@@ -434,7 +432,9 @@ def get_bam_info(bam):
     bam = pysam.AlignmentFile(bam, "rb")
     stats = bam.get_index_statistics()
     n_aligns = int(np.sum([contig.mapped for contig in stats]))
-    chroms = [contig.contig for contig in stats]
+    chroms = dict(
+        [(contig.contig, contig.mapped) for contig in stats if contig.mapped > 0]
+    )
     bam.close()
     return n_aligns, chroms
 
@@ -454,7 +454,7 @@ def main(args):
     # Process BAM alignments from each chrom separately
     logger.info(f"Extracting uncorrected barcodes from {args.bam}")
     func_args = []
-    for chrom in chroms:
+    for chrom in chroms.keys():
         func_args.append((args.bam, chrom, args))
 
     results = launch_pool(align_adapter, func_args, args.threads)
@@ -480,7 +480,6 @@ def main(args):
     pysam.merge(*merge_parameters)
 
     pysam.sort("-@", str(args.threads), "-o", args.output_bam, tmp_bam.name)
-    pysam.index(args.output_bam)
 
     logger.info("Cleaning up temporary files")
     shutil.rmtree(args.tempdir)

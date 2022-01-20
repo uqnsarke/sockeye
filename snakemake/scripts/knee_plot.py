@@ -7,7 +7,6 @@ from collections import Counter
 import matplotlib.pyplot as plt
 import numpy as np
 import numpy.matlib as npm
-from Bio.SeqIO.FastaIO import SimpleFastaParser
 from scipy.signal import argrelextrema
 from scipy.stats import gaussian_kde
 

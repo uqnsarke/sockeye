@@ -6,7 +6,6 @@ channels:
 dependencies:
   - samtools
   - pysam
-  - biopython
   - tqdm
   - editdistance
   - pandas

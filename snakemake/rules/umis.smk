@@ -1,48 +1,21 @@
-rule extract_umis:
-    input:
-        fastq=BARCODES_CORR_READS_FILTERED,
-    output:
-        UMI_EXTRACTED_READS,
-    params:
-        read1=config["READ_STRUCTURE"]["READ1"],
-        read1_suff_length=config["BARCODE"]["READ1_SUFF_LENGTH"],
-        batch_size=config["BARCODE"]["BATCH_SIZE"],
-        barcode_length=config["READ_STRUCTURE"]["BARCODE_LENGTH"],
-        umi_length=config["READ_STRUCTURE"]["UMI_LENGTH"],
-    threads: config["MAX_THREADS"]
-    conda:
-        "../envs/barcodes.yml"
-    shell:
-        "python {SCRIPT_DIR}/extract_umi.py "
-        "-t {threads} "
-        "--read1_adapter {params.read1} "
-        "--read1_suff_length {params.read1_suff_length} "
-        "--batch_size {params.batch_size} "
-        "--barcode_length {params.barcode_length} "
-        "--umi_length {params.umi_length} "
-        "--output {output} "
-        "{input.fastq}"
-
-
 rule cluster_umis:
     input:
-        bam=UMI_UNCORR_TAGGED_BAM,
-        bai=UMI_UNCORR_TAGGED_BAM_BAI,
+        bam=BAM_BC_CORR_UMI_UNCORR_GENE,
+        bai=BAM_BC_CORR_UMI_UNCORR_GENE_BAI,
     output:
-        bam=TAGGED_BAM,
-        bai=TAGGED_BAM_BAI,
+        bam=BAM_BC_CORR_UMI_CORR_GENE,
+        bai=BAM_BC_CORR_UMI_CORR_GENE_BAI,
     conda:
         "../envs/umis.yml"
     shell:
         "python {SCRIPT_DIR}/cluster_umis.py "
-        "--output {output.bam} {input.bam}; "
-        "samtools index {output.bam} "
+        "--output {output.bam} {input.bam}"
 
 
 rule umi_gene_saturation:
     input:
-        bam=TAGGED_BAM,
-        bai=TAGGED_BAM_BAI,
+        bam=BAM_BC_CORR_UMI_CORR_GENE,
+        bai=BAM_BC_CORR_UMI_CORR_GENE_BAI,
     output:
         plot=SAT_PLOT,
     conda:

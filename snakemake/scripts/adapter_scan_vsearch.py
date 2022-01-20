@@ -159,13 +159,6 @@ def run_subprocess(cmd):
     return str(stdout), str(stderr)
 
 
-def check_seqkit():
-    stdout, stderr = run_subprocess("seqkit --quiet -h")
-    if stderr.find("seqkit: command not found") > -1:
-        logging.error("Could not load find seqkit -- check installation")
-        sys.exit(1)
-
-
 def check_vsearch():
     stdout, stderr = run_subprocess("vsearch --quiet -h")
     if stderr.find("vsearch: command not found") > -1:
@@ -594,7 +587,6 @@ def init_logger(args):
 def main(args):
     init_logger(args)
     check_vsearch()
-    # check_seqkit()
     n_reads = count_reads(args.fastq)
     n_batches = int(n_reads / args.batch_size)
 

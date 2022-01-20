@@ -7,8 +7,8 @@ dependencies:
   - pandas
   - tqdm
   - numpy
-  - biopython
+  - pysam
+  - samtools
   - seqkit
   - editdistance
   - parasail-python==1.2.3
-  - vsearch==2.15.1

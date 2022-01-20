@@ -508,7 +508,9 @@ def get_bam_info(bam):
     bam = pysam.AlignmentFile(bam, "rb")
     stats = bam.get_index_statistics()
     n_aligns = int(np.sum([contig.mapped for contig in stats]))
-    chroms = [contig.contig for contig in stats]
+    chroms = dict(
+        [(contig.contig, contig.mapped) for contig in stats if contig.mapped > 0]
+    )
     bam.close()
     return n_aligns, chroms
 
@@ -523,8 +525,9 @@ def main(args):
     os.mkdir(args.tempdir)
 
     # Process BAM alignments from each chrom separately
+    logger.info(f"Assigning barcodes to reads in {args.bam}")
     func_args = []
-    for chrom in chroms:
+    for chrom in chroms.keys():
         func_args.append((args.bam, chrom, args))
 
     chrom_bam_fns = launch_pool(process_bam_records, func_args, args.threads)
@@ -537,7 +540,6 @@ def main(args):
     pysam.merge(*merge_parameters)
 
     pysam.sort("-@", str(args.threads), "-o", args.output, tmp_bam.name)
-    pysam.index(args.output)
 
     logger.info("Cleaning up temporary files")
     shutil.rmtree(args.tempdir)
