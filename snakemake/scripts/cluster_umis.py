@@ -265,7 +265,7 @@ def main(args):
 
     df, n_aligns = read_bam(args)
 
-    logger.info("Correcting UMIs grouping by gene and corrected barcode")
+    logger.info("Correcting UMIs: grouping by gene and corrected barcode")
     # Cluster UMIs that have been grouped by gene and cell barcode
     df["umi_corr"] = df.groupby(["gene", "bc"])["umi_uncorr"].apply(correct_umis)
 

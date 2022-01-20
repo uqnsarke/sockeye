@@ -10,7 +10,6 @@ import shutil
 import tempfile
 
 import editdistance as ed
-import numpy as np
 import parasail
 import pysam
 from tqdm import tqdm
@@ -242,6 +241,31 @@ def calc_ed_with_whitelist(bc_uncorr, whitelist):
     return bc_match, bc_match_ed, next_match_diff
 
 
+LOOKUP = []
+
+for q in range(100):
+    LOOKUP.append(pow(10, -0.1 * q))
+
+
+def compute_mean_qscore(scores):
+    """
+    Returns the phred score corresponding to the mean of the probabilities
+    associated with the phred scores provided.
+
+    :param scores: Iterable of phred scores.
+    :returns: Phred score corresponding to the average error rate, as
+        estimated from the input phred scores.
+    """
+    if not scores:
+        return 0.0
+    sum_prob = 0.0
+    for val in scores:
+        sum_prob += LOOKUP[val]
+    mean_prob = sum_prob / len(scores)
+
+    return -10.0 * math.log10(mean_prob)
+
+
 def parse_probe_alignment(p_alignment, align, prefix_seq, prefix_qv):
     """
     Parse a parasail alignment alignment and add uncorrected UMI and UMI QV
@@ -262,7 +286,8 @@ def parse_probe_alignment(p_alignment, align, prefix_seq, prefix_qv):
 
         umi = umi.strip("-")
         start_idx = prefix_seq.find(umi)
-        umi_qv = np.mean(prefix_qv[start_idx : (start_idx + len(umi))])
+        qv_scores = prefix_qv[start_idx : (start_idx + len(umi))]
+        umi_qv = compute_mean_qscore(qv_scores)
 
         # print(p_alignment.traceback.ref)
         # print(p_alignment.traceback.comp)
@@ -343,7 +368,6 @@ def process_bam_records(tup):
     whitelist, kmer_to_bc_index = load_whitelist(args.whitelist, args.k)
 
     # Open input BAM file
-    pysam.index(input_bam)
     bam = pysam.AlignmentFile(input_bam, "rb")
 
     # Open temporary output BAM file for writing
@@ -507,10 +531,9 @@ def get_bam_info(bam):
     :return: Sum of all alignments in the BAM index file and list of all chroms
     :rtype: int,list
     """
-    pysam.index(bam)
     bam = pysam.AlignmentFile(bam, "rb")
     stats = bam.get_index_statistics()
-    n_aligns = int(np.sum([contig.mapped for contig in stats]))
+    n_aligns = int(sum([contig.mapped for contig in stats]))
     chroms = dict(
         [(contig.contig, contig.mapped) for contig in stats if contig.mapped > 0]
     )
@@ -544,6 +567,7 @@ def main(args):
     pysam.merge(*merge_parameters)
 
     pysam.sort("-@", str(args.threads), "-o", args.output, tmp_bam.name)
+    pysam.index(args.output)
 
     logger.info("Cleaning up temporary files")
     shutil.rmtree(args.tempdir)

@@ -8,6 +8,7 @@ rule cluster_umis:
     conda:
         "../envs/umis.yml"
     shell:
+        "touch {input.bai}; "
         "python {SCRIPT_DIR}/cluster_umis.py "
         "--output {output.bam} {input.bam}"
 
@@ -21,5 +22,6 @@ rule umi_gene_saturation:
     conda:
         "../envs/plotting.yml"
     shell:
+        "touch {input.bai}; "
         "python {SCRIPT_DIR}/saturation.py "
         "--output {output.plot} {input.bam}"

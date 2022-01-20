@@ -27,6 +27,7 @@ rule align_to_ref:
         sam_tmp=temp(SAM_TMP),
         unsort_bam=temp(BAM_UNSORT_TMP),
         sort_bam=BAM_SORT,
+        sort_bam_bai=BAM_SORT_BAI,
     params:
         ref=config["REF_GENOME_FASTA"],
     threads: config["MAX_THREADS"]

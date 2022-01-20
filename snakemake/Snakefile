@@ -47,6 +47,7 @@ REF_CHROM_SIZES = str(ALIGN_DIR / "chrom_sizes.tsv")
 SAM_TMP = str(ALIGN_DIR / "tmp.sam")
 BAM_UNSORT_TMP = str(ALIGN_DIR / "tmp.unsort.bam")
 BAM_SORT = str(ALIGN_DIR / "sorted.bam")
+BAM_SORT_BAI = str(ALIGN_DIR / "sorted.bam.bai")
 
 
 ###################
@@ -54,11 +55,13 @@ BAM_SORT = str(ALIGN_DIR / "sorted.bam")
 ###################
 DEMUX_DIR = OUTPUT_BASE / "{run_id}" / "barcodes"
 BAM_BC_UNCORR = str(DEMUX_DIR / "bc_uncorr.sorted.bam")
+BAM_BC_UNCORR_BAI = str(DEMUX_DIR / "bc_uncorr.sorted.bam.bai")
 BARCODE_COUNTS = str(DEMUX_DIR / "barcode_counts.tsv")
 BARCODE_CLUSTERS = str(DEMUX_DIR / "clusters.fasta")
 BARCODE_WHITELIST = str(DEMUX_DIR / "whitelist.tsv")
 BARCODE_KNEEPLOT = str(DEMUX_DIR / "kneeplot.png")
 BAM_BC_CORR_UMI_UNCORR = str(DEMUX_DIR / "bc_corr.umi_uncorr.sorted.bam")
+BAM_BC_CORR_UMI_UNCORR_BAI = str(DEMUX_DIR / "bc_corr.umi_uncorr.sorted.bam.bai")
 BAM_BC_CORR_UMI_UNCORR_GENE = str(DEMUX_DIR / "bc_corr.umi_uncorr.gene.sorted.bam")
 BAM_BC_CORR_UMI_UNCORR_GENE_BAI = str(
     DEMUX_DIR / "bc_corr.umi_uncorr.gene.sorted.bam.bai"
@@ -102,11 +105,4 @@ include: "rules/features.smk"
 ##### target rules #####
 rule all:
     input:
-        # expand(READ_CONFIG, run_id=RUN_IDS),
-        # expand(STRANDED_FQ, run_id=RUN_IDS),
-        # expand(CONFIG_STATS, run_id=RUN_IDS),
-        # expand(BARCODES_CORR_READS_FILTERED, run_id=RUN_IDS),
-        # expand(BAM_SORT, run_id=RUN_IDS),
-        # expand(FC_SUMMARY, run_id=RUN_IDS),
-        # expand(BAM_BC_CORR_UMI_CORR_GENE, run_id=RUN_IDS),
         expand(SAT_PLOT, run_id=RUN_IDS),

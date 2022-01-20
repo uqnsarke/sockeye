@@ -4,6 +4,7 @@ rule extract_barcodes:
         barcodes=config["BC_SUPERLIST"],
     output:
         bam=BAM_BC_UNCORR,
+        bai=BAM_BC_UNCORR_BAI,
         tsv=BARCODE_COUNTS,
     params:
         read1=config["READ_STRUCTURE"]["READ1"],
@@ -22,8 +23,7 @@ rule extract_barcodes:
         "--umi_length {params.umi_length} "
         "--output_bam {output.bam} "
         "--output_barcodes {output.tsv} "
-        "{input.bam} {input.barcodes}; "
-        "samtools index {output.bam}"
+        "{input.bam} {input.barcodes}"
 
 
 rule generate_whitelist:
@@ -47,9 +47,11 @@ rule generate_whitelist:
 rule assign_barcodes:
     input:
         bam=BAM_BC_UNCORR,
+        bai=BAM_BC_UNCORR_BAI,
         whitelist=BARCODE_WHITELIST,
     output:
-        BAM_BC_CORR_UMI_UNCORR,
+        bam=BAM_BC_CORR_UMI_UNCORR,
+        bai=BAM_BC_CORR_UMI_UNCORR_BAI,
     params:
         max_ed=config["BARCODE"]["MAX_ED"],
         min_ed_diff=config["BARCODE"]["MIN_ED_DIFF"],
@@ -61,9 +63,10 @@ rule assign_barcodes:
     conda:
         "../envs/barcodes.yml"
     shell:
+        "touch {input.bai}; "
         "python {SCRIPT_DIR}/assign_barcodes.py "
         "-t {threads} "
-        "--output {output} "
+        "--output {output.bam} "
         "--max_ed {params.max_ed} "
         "--min_ed_diff {params.min_ed_diff} "
         "--read1_adapter {params.read1} "
@@ -71,4 +74,3 @@ rule assign_barcodes:
         "--barcode_length {params.barcode_length} "
         "--umi_length {params.umi_length} "
         "{input.bam} {input.whitelist}; "
-        "samtools index {output}"

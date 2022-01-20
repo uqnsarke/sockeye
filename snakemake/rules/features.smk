@@ -32,6 +32,7 @@ rule ont_featureCounts_genes:
 rule add_gene_tags_to_bam:
     input:
         bam=BAM_BC_CORR_UMI_UNCORR,
+        bai=BAM_BC_CORR_UMI_UNCORR_BAI,
         fc=FC_READ_ASSIGNS,
     output:
         bam=temp(BAM_BC_CORR_UMI_UNCORR_GENE),
@@ -39,6 +40,7 @@ rule add_gene_tags_to_bam:
     conda:
         "../envs/umis.yml"
     shell:
+        "touch {input.bai}; "
         "python {SCRIPT_DIR}/add_gene_tags.py "
         "--output {output.bam} "
         "{input.bam} {input.fc}"

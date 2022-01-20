@@ -2,6 +2,7 @@ import argparse
 import collections
 import gzip
 import logging
+import math
 import mmap
 import multiprocessing
 import os
@@ -11,7 +12,6 @@ import sys
 import tempfile
 
 import editdistance as ed
-import numpy as np
 import parasail
 import pysam
 from tqdm import tqdm
@@ -305,6 +305,31 @@ def parse_probe_alignment(alignment, read1_probe_seq, args):
     return read1_ed, barcode, bc_start
 
 
+LOOKUP = []
+
+for q in range(100):
+    LOOKUP.append(pow(10, -0.1 * q))
+
+
+def compute_mean_qscore(scores):
+    """
+    Returns the phred score corresponding to the mean of the probabilities
+    associated with the phred scores provided.
+
+    :param scores: Iterable of phred scores.
+    :returns: Phred score corresponding to the average error rate, as
+        estimated from the input phred scores.
+    """
+    if not scores:
+        return 0.0
+    sum_prob = 0.0
+    for val in scores:
+        sum_prob += LOOKUP[val]
+    mean_prob = sum_prob / len(scores)
+
+    return -10.0 * math.log10(mean_prob)
+
+
 def align_adapter(tup):
     """
     Aligns a single adapter template to the read an computes the
@@ -335,7 +360,6 @@ def align_adapter(tup):
         pT="T" * args.polyT_length,
     )
 
-    pysam.index(bam_path)
     bam = pysam.AlignmentFile(bam_path, "rb")
 
     # Write output BAM file
@@ -366,13 +390,27 @@ def align_adapter(tup):
 
         # Require minimal read1 edit distance and require perfect barcode length
         condition1 = read1_ed <= args.max_read1_ed
-        ##########################
-        # TO-DO: can we be more flexible about barcode length?
-        ##########################
+
+        ########################
+        # TO-DO: can we allow barcodes that aren't exactly 16 bp?
+        ########################
+        # if barcode.find("-")>-1:
+        #     for i in range(len(prefix_seq)):
+        #         print(prefix_seq[i], prefix_qv[i])
+        #     idxs = list(find("N", alignment.traceback.ref))
+        #     print(idxs)
+        #     print(alignment.traceback.ref)
+        #     print(alignment.traceback.comp)
+        #     print(alignment.traceback.query)
+        #     print(barcode)
+        #     print(read1_ed)
+        #     print()
+
         condition2 = len(barcode.strip("-")) == args.barcode_length
 
         if condition1 and condition2:
-            bc_qv = np.mean(prefix_qv[bc_start : (bc_start + args.barcode_length + 1)])
+            qv_scores = prefix_qv[bc_start : (bc_start + args.barcode_length + 1)]
+            bc_qv = compute_mean_qscore(qv_scores)
             chrom_barcode_counts[barcode] += 1
 
             # Uncorrected cell barcode = CR:Z
@@ -431,10 +469,9 @@ def get_bam_info(bam):
     :return: Sum of all alignments in the BAM index file and list of all chroms
     :rtype: int,list
     """
-    pysam.index(bam)
     bam = pysam.AlignmentFile(bam, "rb")
     stats = bam.get_index_statistics()
-    n_aligns = int(np.sum([contig.mapped for contig in stats]))
+    n_aligns = int(sum([contig.mapped for contig in stats]))
     chroms = dict(
         [(contig.contig, contig.mapped) for contig in stats if contig.mapped > 0]
     )
@@ -484,6 +521,7 @@ def main(args):
     pysam.merge(*merge_parameters)
 
     pysam.sort("-@", str(args.threads), "-o", args.output_bam, tmp_bam.name)
+    pysam.index(args.output_bam)
 
     logger.info("Cleaning up temporary files")
     shutil.rmtree(args.tempdir)
