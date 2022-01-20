@@ -383,8 +383,9 @@ def process_bam_records(tup):
             # Add corrected barcode to probe sequence to fish out uncorrected UMI
             align = get_uncorrected_umi(align, args)
 
-            # Only write BAM entry in output file if we've assigned a corrected
-            # barcode and an uncorrected UMI
+        # Only write BAM entry in output file if we've assigned a corrected
+        # barcode and an uncorrected UMI
+        if align.has_tag("CB") and align.has_tag("UR"):
             bam_out.write(align)
 
     bam.close()
