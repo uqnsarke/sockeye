@@ -280,24 +280,26 @@ def edit_distance(query, target):
     return d
 
 
-def parse_probe_alignment(alignment, read1_probe_seq, args):
+def parse_probe_alignment(p_alignment, read1_probe_seq, args):
     """ """
     # Find the position of the Ns in the alignment. These correspond
     # to the cell barcode + UMI sequences bound by the read1 and polyT
-    idxs = list(find("N", alignment.traceback.ref))
+    idxs = list(find("N", p_alignment.traceback.ref))
     if len(idxs) > 0:
         # The Ns in the probe successfully aligned to sequence
         bc_start = min(idxs)
 
         # The read1 adapter comprises the first part of the alignment
-        read1 = alignment.traceback.query[0:bc_start]
+        read1 = p_alignment.traceback.query[0:bc_start]
         read1_ed = edit_distance(read1, read1_probe_seq)
 
         # The barcode + UMI sequences in the read correspond to the
         # positions of the aligned Ns in the probe sequence
-        barcode = alignment.traceback.query[bc_start : (bc_start + args.barcode_length)]
+        barcode = p_alignment.traceback.query[
+            bc_start : (bc_start + args.barcode_length)
+        ]
     else:
-        # No Ns in the probe successfully aligned -- ignore this read
+        # No Ns in the probe successfully aligned -- we will ignore this read
         read1_ed = len(read1_probe_seq)
         barcode = ""
         bc_start = 0
@@ -328,6 +330,36 @@ def compute_mean_qscore(scores):
     mean_prob = sum_prob / len(scores)
 
     return -10.0 * math.log10(mean_prob)
+
+
+def find_feature_qscores(feature, p_alignment, prefix_seq, prefix_qv):
+    """
+    Using the parasail alignment results, find the qscores corresponding to the
+    feature (e.g. barcode or UMI) positions in the read.
+
+    :param feature: Feature sequence identified from the parasail alignment
+    :type feature: str
+    :param p_alignment: Parasail alignment object
+    :type p_alignment: class 'parasail.bindings_v2.Result'
+    :param prefix_seq: Nucleotide sequence from the first <args.window> bp of
+        the read
+    :type prefix_seq: str
+    :param prefix_qv: Qscores from the first <args.window> bp of the read
+    :type prefix_qv: np.array
+    :return: Array of phred scale qscores from the identified feature region
+    :rtype: np.array
+    """
+    # Strip feature alignment string of insertions (-)
+    feature_no_ins = feature.replace("-", "")
+
+    # Find where the stripped feature starts and ends in the larger prefis_seq
+    prefix_seq_feature_start = prefix_seq.find(feature_no_ins)
+    prefix_seq_feature_end = prefix_seq_feature_start + len(feature_no_ins)
+
+    # Use these start/end indices to locate the correspoding qscores in prefix_qv
+    feature_qv = prefix_qv[prefix_seq_feature_start:prefix_seq_feature_end]
+
+    return feature_qv
 
 
 def align_adapter(tup):
@@ -376,7 +408,7 @@ def align_adapter(tup):
         prefix_seq = align.get_forward_sequence()[: args.window]
         prefix_qv = align.get_forward_qualities()[: args.window]
 
-        alignment = parasail_alg(
+        p_alignment = parasail_alg(
             s1=prefix_seq,
             s2=probe_seq,
             open=args.gap_open,
@@ -385,33 +417,17 @@ def align_adapter(tup):
         )
 
         read1_ed, barcode, bc_start = parse_probe_alignment(
-            alignment, read1_probe_seq, args
+            p_alignment, read1_probe_seq, args
         )
 
-        # Require minimal read1 edit distance and require perfect barcode length
-        condition1 = read1_ed <= args.max_read1_ed
-
-        ########################
-        # TO-DO: can we allow barcodes that aren't exactly 16 bp?
-        ########################
-        # if barcode.find("-")>-1:
-        #     for i in range(len(prefix_seq)):
-        #         print(prefix_seq[i], prefix_qv[i])
-        #     idxs = list(find("N", alignment.traceback.ref))
-        #     print(idxs)
-        #     print(alignment.traceback.ref)
-        #     print(alignment.traceback.comp)
-        #     print(alignment.traceback.query)
-        #     print(barcode)
-        #     print(read1_ed)
-        #     print()
-
-        condition2 = len(barcode.strip("-")) == args.barcode_length
-
-        if condition1 and condition2:
-            qv_scores = prefix_qv[bc_start : (bc_start + args.barcode_length + 1)]
-            bc_qv = compute_mean_qscore(qv_scores)
+        # Require minimum read1 edit distance
+        if read1_ed <= args.max_read1_ed:
+            qscores = find_feature_qscores(barcode, p_alignment, prefix_seq, prefix_qv)
+            bc_qv = compute_mean_qscore(qscores)
             chrom_barcode_counts[barcode] += 1
+
+            # Strip out insertions from alignment to get read barcode sequence
+            barcode = barcode.replace("-", "")
 
             # Uncorrected cell barcode = CR:Z
             align.set_tag("CR", barcode, value_type="Z")
@@ -419,9 +435,9 @@ def align_adapter(tup):
             align.set_tag("CY", "{:.2f}".format(bc_qv), value_type="Z")
 
             # print(read_id)
-            # print(alignment.traceback.ref)
-            # print(alignment.traceback.comp)
-            # print(alignment.traceback.query)
+            # print(p_alignment.traceback.ref)
+            # print(p_alignment.traceback.comp)
+            # print(p_alignment.traceback.query)
             # print()
 
             # Only write BAM entry in output file if it will have CR and CY tags

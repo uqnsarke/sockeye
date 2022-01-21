@@ -266,6 +266,36 @@ def compute_mean_qscore(scores):
     return -10.0 * math.log10(mean_prob)
 
 
+def find_feature_qscores(feature, p_alignment, prefix_seq, prefix_qv):
+    """
+    Using the parasail alignment results, find the qscores corresponding to the
+    feature (e.g. barcode or UMI) positions in the read.
+
+    :param feature: Feature sequence identified from the parasail alignment
+    :type feature: str
+    :param p_alignment: Parasail alignment object
+    :type p_alignment: class 'parasail.bindings_v2.Result'
+    :param prefix_seq: Nucleotide sequence from the first <args.window> bp of
+        the read
+    :type prefix_seq: str
+    :param prefix_qv: Qscores from the first <args.window> bp of the read
+    :type prefix_qv: np.array
+    :return: Array of phred scale qscores from the identified feature region
+    :rtype: np.array
+    """
+    # Strip feature alignment string of insertions (-)
+    feature_no_ins = feature.replace("-", "")
+
+    # Find where the stripped feature starts and ends in the larger prefis_seq
+    prefix_seq_feature_start = prefix_seq.find(feature_no_ins)
+    prefix_seq_feature_end = prefix_seq_feature_start + len(feature_no_ins)
+
+    # Use these start/end indices to locate the correspoding qscores in prefix_qv
+    feature_qv = prefix_qv[prefix_seq_feature_start:prefix_seq_feature_end]
+
+    return feature_qv
+
+
 def parse_probe_alignment(p_alignment, align, prefix_seq, prefix_qv):
     """
     Parse a parasail alignment alignment and add uncorrected UMI and UMI QV
@@ -284,15 +314,15 @@ def parse_probe_alignment(p_alignment, align, prefix_seq, prefix_qv):
     if len(idxs) > 0:
         umi = p_alignment.traceback.query[min(idxs) : max(idxs) + 1]
 
-        umi = umi.strip("-")
-        start_idx = prefix_seq.find(umi)
-        qv_scores = prefix_qv[start_idx : (start_idx + len(umi))]
-        umi_qv = compute_mean_qscore(qv_scores)
+        qscores = find_feature_qscores(umi, p_alignment, prefix_seq, prefix_qv)
+        umi_qv = compute_mean_qscore(qscores)
 
         # print(p_alignment.traceback.ref)
         # print(p_alignment.traceback.comp)
         # print(p_alignment.traceback.query)
         # print()
+
+        umi = umi.replace("-", "")
 
         # Uncorrected UMI = UR:Z
         align.set_tag("UR", umi, value_type="Z")
