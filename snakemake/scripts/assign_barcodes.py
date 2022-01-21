@@ -415,7 +415,7 @@ def process_bam_records(tup):
         bc_uncorr = align.get_tag("CR")
 
         # Don't consider any uncorrected barcodes that are shorter than k
-        if len(bc_uncorr >= args.k):
+        if len(bc_uncorr) >= args.k:
             # Decompose uncorrected barcode into N k-mers
             bc_uncorr_kmers = split_seq_into_kmers(bc_uncorr, args.k)
             # Filter the whitelist to only those with at least one of the k-mers
