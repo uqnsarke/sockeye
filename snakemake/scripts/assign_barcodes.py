@@ -586,7 +586,8 @@ def main(args):
     # Process BAM alignments from each chrom separately
     logger.info(f"Assigning barcodes to reads in {args.bam}")
     func_args = []
-    for chrom in chroms.keys():
+    chroms_sorted = dict(sorted(chroms.items(), key=lambda item: item[1]))
+    for chrom in chroms_sorted.keys():
         func_args.append((args.bam, chrom, args))
 
     chrom_bam_fns = launch_pool(process_bam_records, func_args, args.threads)
