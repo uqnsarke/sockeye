@@ -513,7 +513,7 @@ def split_seq_into_kmers(seq, k):
     :return: List of k-mers
     :rtype: list
     """
-    assert len(seq) > k, "Pick a value for k that is less than len(barcode)"
+    assert len(seq) >= k, "Pick a value for k that is less than len(barcode)"
 
     kmers = []
     for i in range(0, len(seq) - k + 1):
