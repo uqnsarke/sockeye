@@ -414,34 +414,36 @@ def process_bam_records(tup):
 
         bc_uncorr = align.get_tag("CR")
 
-        # Decompose uncorrected barcode into N k-mers
-        bc_uncorr_kmers = split_seq_into_kmers(bc_uncorr, args.k)
-        # Filter the whitelist to only those with at least one of the k-mers
-        # from the uncorrected barcode
-        filt_whitelist = filter_whitelist_by_kmers(
-            whitelist, bc_uncorr_kmers, kmer_to_bc_index
-        )
+        # Don't consider any uncorrected barcodes that are shorter than k
+        if len(bc_uncorr >= args.k):
+            # Decompose uncorrected barcode into N k-mers
+            bc_uncorr_kmers = split_seq_into_kmers(bc_uncorr, args.k)
+            # Filter the whitelist to only those with at least one of the k-mers
+            # from the uncorrected barcode
+            filt_whitelist = filter_whitelist_by_kmers(
+                whitelist, bc_uncorr_kmers, kmer_to_bc_index
+            )
 
-        # Calc edit distances between uncorrected barcode and the filtered
-        # whitelist barcodes
-        bc_match, bc_match_ed, next_match_diff = calc_ed_with_whitelist(
-            bc_uncorr, filt_whitelist
-        )
+            # Calc edit distances between uncorrected barcode and the filtered
+            # whitelist barcodes
+            bc_match, bc_match_ed, next_match_diff = calc_ed_with_whitelist(
+                bc_uncorr, filt_whitelist
+            )
 
-        # Check barcode match edit distance and difference to runner-up edit distance
-        condition1 = bc_match_ed <= args.max_ed
-        condition2 = next_match_diff >= args.min_ed_diff
-        if condition1 and condition2:
-            # Add corrected cell barcode = CB:Z
-            align.set_tag("CB", bc_match, value_type="Z")
+            # Check barcode match edit distance and difference to runner-up edit distance
+            condition1 = bc_match_ed <= args.max_ed
+            condition2 = next_match_diff >= args.min_ed_diff
+            if condition1 and condition2:
+                # Add corrected cell barcode = CB:Z
+                align.set_tag("CB", bc_match, value_type="Z")
 
-            # Add corrected barcode to probe sequence to fish out uncorrected UMI
-            align = get_uncorrected_umi(align, args)
+                # Add corrected barcode to probe sequence to fish out uncorrected UMI
+                align = get_uncorrected_umi(align, args)
 
-        # Only write BAM entry in output file if we've assigned a corrected
-        # barcode and an uncorrected UMI
-        if align.has_tag("CB") and align.has_tag("UR"):
-            bam_out.write(align)
+            # Only write BAM entry in output file if we've assigned a corrected
+            # barcode and an uncorrected UMI
+            if align.has_tag("CB") and align.has_tag("UR"):
+                bam_out.write(align)
 
     bam.close()
     bam_out.close()
