@@ -459,14 +459,6 @@ def revcomp_adapter_config(adapters_string):
     return rc_string
 
 
-def create_header_string(subread_info):
-    header_items = set(
-        ["readlen", "fl", "stranded", "orig_strand", "adapter_config", "lab"]
-    )
-    tups = [(k, str(v)) for k, v in subread_info.items() if k in header_items]
-    return ";".join(["=".join(pair) for pair in tups])
-
-
 def write_stranded_fastq(batch_reads, read_info):
     """ """
     tmp_fastq = tempfile.NamedTemporaryFile(
@@ -492,27 +484,6 @@ def write_stranded_fastq(batch_reads, read_info):
                 f_out.write(f"{subread_quals}\n")
 
     return tmp_fastq.name
-    #
-    # for Read in SeqIO.parse(tmp_fastq, "fastq"):
-    #     read_quals = Read.letter_annotations["phred_quality"]
-    #     for subread_id, d in read_info[Read.id].items():
-    #         subread_info = read_info[Read.id][subread_id]
-    #         subread_seq = str(Read.seq[d["start"] : d["end"]])
-    #         Subread = SeqRecord(Seq(subread_seq), id=subread_id)
-    #         subread_quals = read_quals[d["start"] : d["end"]]
-    #         Subread.letter_annotations["phred_quality"] = subread_quals
-    #         if d["orig_strand"] == "-":
-    #             rc_config = revcomp_adapter_config(subread_info["adapter_config"])
-    #             subread_info["adapter_config"] = rc_config
-    #             Subread.seq = Subread.seq.reverse_complement()
-    #             quals = Read.letter_annotations["phred_quality"]
-    #             Read.letter_annotations["phred_quality"] = quals[::-1]
-    #         header_str = create_header_string(subread_info)
-    #         Subread.description = header_str
-    #         subreads.append(Subread)
-    # stranded_tmp_fastq = tmp_fastq.replace(".fastq", ".stranded.fastq")
-    # SeqIO.write(subreads, stranded_tmp_fastq, "fastq")
-    # return stranded_tmp_fastq
 
 
 def open_fastq(fastq):
