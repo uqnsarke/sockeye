@@ -7,7 +7,7 @@ dependencies:
   - pandas
   - tqdm
   - numpy
-  - pysam
+  - pysam==0.15.3
   - samtools
   - seqkit
   - editdistance
