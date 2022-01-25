@@ -7,9 +7,11 @@ rule cluster_umis:
         bai=BAM_BC_CORR_UMI_CORR_GENE_BAI,
     conda:
         "../envs/umis.yml"
+    threads: config["MAX_THREADS"]
     shell:
         "touch {input.bai}; "
         "python {SCRIPT_DIR}/cluster_umis.py "
+        "--threads {threads} "
         "--output {output.bam} {input.bam}"
 
 
