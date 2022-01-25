@@ -1,6 +1,7 @@
 import argparse
 import itertools
 import logging
+import multiprocessing
 import subprocess
 
 import numpy as np
@@ -40,6 +41,10 @@ def parse_args():
         assigned by featureCounts [1000]",
         type=int,
         default=1000,
+    )
+
+    parser.add_argument(
+        "-t", "--threads", help="Threads to use [4]", type=int, default=4
     )
 
     parser.add_argument(
@@ -202,13 +207,53 @@ def add_tags(umis, genes, n_aligns, args):
     bam_out.close()
 
 
-def count_bam_entries(bam):
+def get_bam_info(bam):
     """
-    Call `samtools idxstat <BAM> | cut -f3` to get number of alignments
+    Use `samtools idxstat` to get number of alignments and names of all contigs
+    in the reference.
+
+    :param bam: Path to sorted BAM file
+    :type bame: str
+    :return: Sum of all alignments in the BAM index file and list of all chroms
+    :rtype: int,list
     """
-    stdout, stderr = run_subprocess(f"samtools idxstats {bam} | cut -f3")
-    n_aligns = np.sum([int(x) for x in stdout.split("\n") if x != ""])
-    return n_aligns
+    bam = pysam.AlignmentFile(bam, "rb")
+    stats = bam.get_index_statistics()
+    n_aligns = int(sum([contig.mapped for contig in stats]))
+    chroms = dict(
+        [(contig.contig, contig.mapped) for contig in stats if contig.mapped > 0]
+    )
+    bam.close()
+    return n_aligns, chroms
+
+
+def create_region_name(align, args):
+    """
+    Create a 'gene name' based on the aligned chromosome and coordinates.
+    The midpoint of the alignment determines which genomic interval to use
+    for the 'gene name'.
+
+    :param align: pysam BAM alignment
+    :type align: class 'pysam.libcalignedsegment.AlignedSegment'
+    :param args: object containing all supplied arguments
+    :type args: class 'argparse.Namespace'
+    :return: Newly created 'gene name' based on aligned chromosome and coords
+    :rtype: str
+    """
+    chrom = align.reference_name
+    start_pos = align.get_reference_positions()[0]
+    end_pos = align.get_reference_positions()[-1]
+
+    # Find the midpoint of the alignment
+    midpoint = int((start_pos + end_pos) / 2)
+
+    # Pick the genomic interval based on this alignment midpoint
+    interval_start = np.floor(midpoint / args.ref_interval) * args.ref_interval
+    interval_end = np.ceil(midpoint / args.ref_interval) * args.ref_interval
+
+    # New 'gene name' will be <chr>_<interval_start>_<interval_end>
+    gene = f"{chrom}_{int(interval_start)}_{int(interval_end)}"
+    return gene
 
 
 def read_bam(args):
@@ -216,7 +261,7 @@ def read_bam(args):
     Read gene, cell barcode and UMI values from BAM entries
     """
     logger.info(f"Counting alignments in {args.bam}")
-    n_aligns = count_bam_entries(args.bam)
+    n_aligns, chroms = get_bam_info(args.bam)
 
     bam = pysam.AlignmentFile(args.bam, "rb")
 
@@ -236,19 +281,7 @@ def read_bam(args):
 
         if gene == "NA":
             # Group by region if no gene annotation
-            chrom = align.reference_name
-            start_pos = align.get_reference_positions()[0]
-            end_pos = align.get_reference_positions()[-1]
-
-            # Find the midpoint of the alignment
-            midpoint = int((start_pos + end_pos) / 2)
-
-            # Pick the genomic interval based on this alignment midpoint
-            interval_start = np.floor(midpoint / args.ref_interval) * args.ref_interval
-            interval_end = np.ceil(midpoint / args.ref_interval) * args.ref_interval
-
-            # New 'gene name' will be <chr>_<interval_start>_<interval_end>
-            gene = f"{chrom}_{int(interval_start)}_{int(interval_end)}"
+            gene = create_region_name(align, args)
 
         records.append((read_id, gene, bc_corr, umi_uncorr))
 
@@ -260,14 +293,35 @@ def read_bam(args):
     return df, n_aligns
 
 
+def applyParallel(dfGrouped, func, threads, chunks):
+    with multiprocessing.Pool(threads) as p:
+        res = list(
+            tqdm(p.imap(func, [group for name, group in dfGrouped]), total=chunks)
+        )
+    return pd.concat(res)
+
+
+def func_group_apply(df):
+    return df.groupby(["gene", "bc"])["umi_uncorr"].apply(correct_umis)
+
+
 def main(args):
     init_logger(args)
 
     df, n_aligns = read_bam(args)
 
     logger.info("Correcting UMIs: grouping by gene and corrected barcode")
-    # Cluster UMIs that have been grouped by gene and cell barcode
-    df["umi_corr"] = df.groupby(["gene", "bc"])["umi_uncorr"].apply(correct_umis)
+    # Create codes for each gene/region, which we'll use for chunking
+    df["gene"] = pd.Categorical(df["gene"])
+    df["gene_id"] = df["gene"].cat.codes
+    df["data_chunk"] = df["gene_id"].mod(args.threads * 3)
+
+    df["umi_corr"] = applyParallel(
+        df.groupby("data_chunk"),
+        func_group_apply,
+        args.threads,
+        df["data_chunk"].nunique(),
+    )
 
     # Simplify to a read_id:umi_corr dictionary
     df = df.drop(["bc", "umi_uncorr"], axis=1).set_index("read_id")
