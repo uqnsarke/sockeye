@@ -8,7 +8,7 @@ dependencies:
   - tqdm
   - numpy
   - pysam==0.15.3
-  - samtools
+  - samtools>=1.10
   - seqkit
   - editdistance
   - parasail-python==1.2.3

@@ -4,6 +4,6 @@ channels:
   - bioconda
 dependencies:
   - seqkit
-  - samtools
+  - samtools>=1.10
   - minimap2
   - subread

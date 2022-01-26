@@ -408,7 +408,7 @@ def process_bam_records(tup):
     bam_out = pysam.AlignmentFile(chrom_bam.name, "wb", template=bam)
 
     for align in bam.fetch(contig=chrom):
-        # Make sure each alignment in this BAM has an uncorrected baracode and
+        # Make sure each alignment in this BAM has an uncorrected barcode and
         # barcode QV
         assert align.has_tag("CR") and align.has_tag("CY"), "CR or CY tags not found"
 
@@ -600,7 +600,6 @@ def main(args):
     pysam.merge(*merge_parameters)
 
     pysam.sort("-@", str(args.threads), "-o", args.output, tmp_bam.name)
-    pysam.index(args.output)
 
     logger.info("Cleaning up temporary files")
     shutil.rmtree(args.tempdir)

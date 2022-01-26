@@ -35,8 +35,7 @@ rule add_gene_tags_to_bam:
         bai=BAM_BC_CORR_UMI_UNCORR_BAI,
         fc=FC_READ_ASSIGNS,
     output:
-        bam=temp(BAM_BC_CORR_UMI_UNCORR_GENE),
-        bai=temp(BAM_BC_CORR_UMI_UNCORR_GENE_BAI),
+        bam=temp(BAM_BC_CORR_UMI_UNCORR_GENE_TMP),
     conda:
         "../envs/umis.yml"
     shell:
@@ -44,3 +43,17 @@ rule add_gene_tags_to_bam:
         "python {SCRIPT_DIR}/add_gene_tags.py "
         "--output {output.bam} "
         "{input.bam} {input.fc}"
+
+
+rule cleanup_headers_3:
+    input:
+        BAM_BC_CORR_UMI_UNCORR_GENE_TMP,
+    output:
+        bam=temp(BAM_BC_CORR_UMI_UNCORR_GENE),
+        bai=temp(BAM_BC_CORR_UMI_UNCORR_GENE_BAI),
+    conda:
+        "../envs/samtools.yml"
+    shell:
+        "samtools reheader --no-PG -c 'grep -v ^@PG' "
+        "{input} > {output.bam}; "
+        "samtools index {output.bam}"

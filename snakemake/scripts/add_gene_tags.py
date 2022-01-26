@@ -130,8 +130,6 @@ def main(args):
 
     process_bam_entries(args)
 
-    pysam.index(args.output)
-
 
 if __name__ == "__main__":
     args = parse_args()

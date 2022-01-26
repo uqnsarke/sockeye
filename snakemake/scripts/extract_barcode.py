@@ -537,7 +537,6 @@ def main(args):
     pysam.merge(*merge_parameters)
 
     pysam.sort("-@", str(args.threads), "-o", args.output_bam, tmp_bam.name)
-    pysam.index(args.output_bam)
 
     logger.info("Cleaning up temporary files")
     shutil.rmtree(args.tempdir)

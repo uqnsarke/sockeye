@@ -2,7 +2,12 @@ import argparse
 import itertools
 import logging
 import multiprocessing
+import os
+import pathlib
+import shutil
 import subprocess
+import sys
+import tempfile
 
 import numpy as np
 import pandas as pd
@@ -56,6 +61,11 @@ def parse_args():
 
     # Parse arguments
     args = parser.parse_args()
+
+    # Create temp dir and add that to the args object
+    p = pathlib.Path(args.output)
+    tempdir = tempfile.TemporaryDirectory(prefix="tmp.", dir=p.parents[0])
+    args.tempdir = tempdir.name
 
     return args
 
@@ -188,11 +198,18 @@ def correct_umis(umis):
     return umis.replace(umi_map)
 
 
-def add_tags(umis, genes, n_aligns, args):
-    bam = pysam.AlignmentFile(args.bam, "rb")
-    bam_out = pysam.AlignmentFile(args.output, "wb", template=bam)
+def add_tags(chrom, umis, genes, args):
+    """ """
+    # Open temporary output BAM file for writing
+    suff = f".{chrom}.bam"
+    chrom_bam = tempfile.NamedTemporaryFile(
+        prefix="tmp.align.", suffix=suff, dir=args.tempdir, delete=False
+    )
 
-    for i, align in enumerate(tqdm(bam.fetch(), total=n_aligns)):
+    bam = pysam.AlignmentFile(args.bam, "rb")
+    bam_out = pysam.AlignmentFile(chrom_bam.name, "wb", template=bam)
+
+    for align in bam.fetch(chrom):
         read_id = align.query_name
 
         # Corrected UMI = UB:Z
@@ -205,6 +222,8 @@ def add_tags(umis, genes, n_aligns, args):
 
     bam.close()
     bam_out.close()
+
+    return chrom_bam.name
 
 
 def get_bam_info(bam):
@@ -256,16 +275,14 @@ def create_region_name(align, args):
     return gene
 
 
-def read_bam(args):
+def read_bam(bam):
     """
     Read gene, cell barcode and UMI values from BAM entries
     """
-    logger.info(f"Counting alignments in {args.bam}")
-    n_aligns, chroms = get_bam_info(args.bam)
+    n_aligns, chroms = get_bam_info(bam)
 
-    bam = pysam.AlignmentFile(args.bam, "rb")
+    bam = pysam.AlignmentFile(bam, "rb")
 
-    logger.info(f"Reading read / barcode / UMI info from {args.bam}")
     records = []
     for align in tqdm(bam.fetch(), total=n_aligns):
         read_id = align.query_name
@@ -290,14 +307,42 @@ def read_bam(args):
     )
     bam.close()
 
-    return df, n_aligns
+    return df
 
 
-def applyParallel(dfGrouped, func, threads, chunks):
-    with multiprocessing.Pool(threads) as p:
-        res = list(
-            tqdm(p.imap(func, [group for name, group in dfGrouped]), total=chunks)
-        )
+def launch_pool(func, func_args, procs=1):
+    """
+    Use multiprocessing library to create pool and map function calls to
+    that pool
+
+    :param procs: Number of processes to use for pool
+    :type procs: int, optional
+    :param func: Function to exececute in the pool
+    :type func: function
+    :param func_args: List containing arguments for each call to function <funct>
+    :type func_args: list
+    :return: List of results returned by each call to function <funct>
+    :rtype: list
+    """
+    p = multiprocessing.Pool(processes=procs)
+    try:
+        results = list(tqdm(p.imap(func, func_args), total=len(func_args)))
+        p.close()
+        p.join()
+    except KeyboardInterrupt:
+        p.terminate()
+    return results
+
+
+def launch_df_pool(df_grouped, func, threads, chunks):
+    """ """
+    p = multiprocessing.Pool(processes=threads)
+    try:
+        res = list(tqdm(p.imap(func, [df_ for idx, df_ in df_grouped]), total=chunks))
+        p.close()
+        p.join()
+    except KeyboardInterrupt:
+        p.terminate()
     return pd.concat(res)
 
 
@@ -305,36 +350,102 @@ def func_group_apply(df):
     return df.groupby(["gene", "bc"])["umi_uncorr"].apply(correct_umis)
 
 
-def main(args):
-    init_logger(args)
+def process_bam_records(tup):
+    """
+    Read through all the alignments for specific chromosome to pull out
+    the gene, barcode, and uncorrected UMI information. Use that to cluster
+    UMIs and get the corrected UMI sequence. We'll then write out a temporary
+    chromosome-specific BAM file with the corrected UMI tag (UB).
 
-    df, n_aligns = read_bam(args)
+    :param tup: Tuple containing the input arguments
+    :type tup: tup
+    :return: Path to a temporary BAM file
+    :rtype: str
+    """
+    input_bam = tup[0]
+    chrom = tup[1]
+    args = tup[2]
 
-    logger.info("Correcting UMIs: grouping by gene and corrected barcode")
-    # Create codes for each gene/region, which we'll use for chunking
-    df["gene"] = pd.Categorical(df["gene"])
-    df["gene_id"] = df["gene"].cat.codes
-    df["data_chunk"] = df["gene_id"].mod(args.threads * 3)
+    # Open input BAM file
+    bam = pysam.AlignmentFile(input_bam, "rb")
 
-    df["umi_corr"] = applyParallel(
-        df.groupby("data_chunk"),
-        func_group_apply,
-        args.threads,
-        df["data_chunk"].nunique(),
+    records = []
+    for align in bam.fetch(contig=chrom):
+        read_id = align.query_name
+
+        # Make sure each alignment in this BAM has the expected tags
+        for tag in ["UR", "CB", "GN"]:
+            assert align.has_tag(tag), f"{tag} tag not found in f{read_id}"
+
+        # Corrected cell barcode = CB:Z
+        bc_corr = align.get_tag("CB")
+
+        # Uncorrected UMI = UR:Z
+        umi_uncorr = align.get_tag("UR")
+
+        # Annotated gene name = GN:Z
+        gene = align.get_tag("GN")
+
+        # If no gene annotation exists
+        if gene == "NA":
+            # Group by region if no gene annotation
+            gene = create_region_name(align, args)
+
+        records.append((read_id, gene, bc_corr, umi_uncorr))
+
+    # Done reading the chrom-specific alignments from the BAM
+    bam.close()
+
+    # Create a dataframe with chrom-specific data
+    df = pd.DataFrame.from_records(
+        records, columns=["read_id", "gene", "bc", "umi_uncorr"]
     )
+
+    df["umi_corr"] = df.groupby(["gene", "bc"])["umi_uncorr"].apply(correct_umis)
 
     # Simplify to a read_id:umi_corr dictionary
     df = df.drop(["bc", "umi_uncorr"], axis=1).set_index("read_id")
 
     # Dict of corrected UMI for each read ID
     umis = df.to_dict()["umi_corr"]
+
     # Dict of gene names to add <chr>_<start>_<end> in place of NA
     genes = df.to_dict()["gene"]
 
-    logger.info(f"Writing corrected UMI tags (UB) into {args.output}")
-    # Add corrected UMIs to each BAM entry via the UB:Z tag
-    add_tags(umis, genes, n_aligns, args)
-    pysam.index(args.output)
+    # Add corrected UMIs to each chrom-specific BAM entry via the UB:Z tag
+    chrom_bam = add_tags(chrom, umis, genes, args)
+
+    return chrom_bam
+
+
+def main(args):
+    init_logger(args)
+    n_aligns, chroms = get_bam_info(args.bam)
+
+    # Create temporary directory
+    if os.path.exists(args.tempdir):
+        shutil.rmtree(args.tempdir)
+    os.mkdir(args.tempdir)
+
+    logger.info(f"Processing input BAM using {args.threads} threads")
+    func_args = []
+    chroms_sorted = dict(sorted(chroms.items(), key=lambda item: item[1]))
+    for chrom in chroms_sorted.keys():
+        func_args.append((args.bam, chrom, args))
+
+    chrom_bam_fns = launch_pool(process_bam_records, func_args, args.threads)
+
+    logger.info(f"Writing BAM with CR, CB, CY, UR, UB, and UY tags to {args.output}")
+    tmp_bam = tempfile.NamedTemporaryFile(
+        prefix="tmp.align.", suffix=".unsorted.bam", dir=args.tempdir, delete=False
+    )
+    merge_parameters = ["-f", tmp_bam.name] + list(chrom_bam_fns)
+    pysam.merge(*merge_parameters)
+
+    pysam.sort("-@", str(args.threads), "-o", args.output, tmp_bam.name)
+
+    logger.info("Cleaning up temporary files")
+    shutil.rmtree(args.tempdir)
 
 
 if __name__ == "__main__":

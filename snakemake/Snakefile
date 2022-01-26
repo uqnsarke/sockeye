@@ -54,18 +54,24 @@ BAM_SORT_BAI = str(ALIGN_DIR / "sorted.bam.bai")
 # BARCODE DEMUX FILES
 ###################
 DEMUX_DIR = OUTPUT_BASE / "{run_id}" / "barcodes"
+BAM_BC_UNCORR_TMP = str(DEMUX_DIR / "bc_uncorr.tmp.sorted.bam")
 BAM_BC_UNCORR = str(DEMUX_DIR / "bc_uncorr.sorted.bam")
 BAM_BC_UNCORR_BAI = str(DEMUX_DIR / "bc_uncorr.sorted.bam.bai")
 BARCODE_COUNTS = str(DEMUX_DIR / "barcode_counts.tsv")
 BARCODE_CLUSTERS = str(DEMUX_DIR / "clusters.fasta")
 BARCODE_WHITELIST = str(DEMUX_DIR / "whitelist.tsv")
 BARCODE_KNEEPLOT = str(DEMUX_DIR / "kneeplot.png")
+BAM_BC_CORR_UMI_UNCORR_TMP = str(DEMUX_DIR / "bc_corr.umi_uncorr.tmp.sorted.bam")
 BAM_BC_CORR_UMI_UNCORR = str(DEMUX_DIR / "bc_corr.umi_uncorr.sorted.bam")
 BAM_BC_CORR_UMI_UNCORR_BAI = str(DEMUX_DIR / "bc_corr.umi_uncorr.sorted.bam.bai")
+BAM_BC_CORR_UMI_UNCORR_GENE_TMP = str(
+    DEMUX_DIR / "bc_corr.umi_uncorr.gene.tmp.sorted.bam"
+)
 BAM_BC_CORR_UMI_UNCORR_GENE = str(DEMUX_DIR / "bc_corr.umi_uncorr.gene.sorted.bam")
 BAM_BC_CORR_UMI_UNCORR_GENE_BAI = str(
     DEMUX_DIR / "bc_corr.umi_uncorr.gene.sorted.bam.bai"
 )
+BAM_BC_CORR_UMI_CORR_GENE_TMP = str(DEMUX_DIR / "bc_corr.umi_corr.gene.tmp.sorted.bam")
 BAM_BC_CORR_UMI_CORR_GENE = str(DEMUX_DIR / "bc_corr.umi_corr.gene.sorted.bam")
 BAM_BC_CORR_UMI_CORR_GENE_BAI = str(DEMUX_DIR / "bc_corr.umi_corr.gene.sorted.bam.bai")
 

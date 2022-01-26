@@ -3,8 +3,7 @@ rule extract_barcodes:
         bam=BAM_SORT,
         barcodes=config["BC_SUPERLIST"],
     output:
-        bam=BAM_BC_UNCORR,
-        bai=BAM_BC_UNCORR_BAI,
+        bam=temp(BAM_BC_UNCORR_TMP),
         tsv=BARCODE_COUNTS,
     params:
         read1=config["READ_STRUCTURE"]["READ1"],
@@ -24,6 +23,20 @@ rule extract_barcodes:
         "--output_bam {output.bam} "
         "--output_barcodes {output.tsv} "
         "{input.bam} {input.barcodes}"
+
+
+rule cleanup_headers_1:
+    input:
+        BAM_BC_UNCORR_TMP,
+    output:
+        bam=BAM_BC_UNCORR,
+        bai=BAM_BC_UNCORR_BAI,
+    conda:
+        "../envs/samtools.yml"
+    shell:
+        "samtools reheader --no-PG -c 'grep -v ^@PG' "
+        "{input} > {output.bam}; "
+        "samtools index {output.bam}"
 
 
 rule generate_whitelist:
@@ -50,8 +63,7 @@ rule assign_barcodes:
         bai=BAM_BC_UNCORR_BAI,
         whitelist=BARCODE_WHITELIST,
     output:
-        bam=BAM_BC_CORR_UMI_UNCORR,
-        bai=BAM_BC_CORR_UMI_UNCORR_BAI,
+        bam=temp(BAM_BC_CORR_UMI_UNCORR_TMP),
     params:
         max_ed=config["BARCODE"]["MAX_ED"],
         min_ed_diff=config["BARCODE"]["MIN_ED_DIFF"],
@@ -74,3 +86,17 @@ rule assign_barcodes:
         "--barcode_length {params.barcode_length} "
         "--umi_length {params.umi_length} "
         "{input.bam} {input.whitelist}; "
+
+
+rule cleanup_headers_2:
+    input:
+        BAM_BC_CORR_UMI_UNCORR_TMP,
+    output:
+        bam=BAM_BC_CORR_UMI_UNCORR,
+        bai=BAM_BC_CORR_UMI_UNCORR_BAI,
+    conda:
+        "../envs/samtools.yml"
+    shell:
+        "samtools reheader --no-PG -c 'grep -v ^@PG' "
+        "{input} > {output.bam}; "
+        "samtools index {output.bam}"
