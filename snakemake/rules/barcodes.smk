@@ -85,7 +85,7 @@ rule assign_barcodes:
         "--read1_suff_length {params.read1_suff_length} "
         "--barcode_length {params.barcode_length} "
         "--umi_length {params.umi_length} "
-        "{input.bam} {input.whitelist}; "
+        "{input.bam} {input.whitelist} "
 
 
 rule cleanup_headers_2:

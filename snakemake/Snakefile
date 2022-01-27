@@ -51,47 +51,42 @@ BAM_SORT_BAI = str(ALIGN_DIR / "sorted.bam.bai")
 
 
 ###################
-# BARCODE DEMUX FILES
+# BARCODE + UMI DEMUX FILES
 ###################
-DEMUX_DIR = OUTPUT_BASE / "{run_id}" / "barcodes"
-BAM_BC_UNCORR_TMP = str(DEMUX_DIR / "bc_uncorr.tmp.sorted.bam")
-BAM_BC_UNCORR = str(DEMUX_DIR / "bc_uncorr.sorted.bam")
-BAM_BC_UNCORR_BAI = str(DEMUX_DIR / "bc_uncorr.sorted.bam.bai")
-BARCODE_COUNTS = str(DEMUX_DIR / "barcode_counts.tsv")
-BARCODE_CLUSTERS = str(DEMUX_DIR / "clusters.fasta")
+DEMUX_DIR = OUTPUT_BASE / "{run_id}" / "demux"
+# All chrom files
+BAM_BC_UNCORR_TMP = str(DEMUX_DIR / "bc_extract.tmp.sorted.bam")
+BAM_BC_UNCORR = str(DEMUX_DIR / "bc_extract.sorted.bam")
+BAM_BC_UNCORR_BAI = str(DEMUX_DIR / "bc_extract.sorted.bam.bai")
+BARCODE_COUNTS = str(DEMUX_DIR / "uncorrected_bc_counts.tsv")
 BARCODE_WHITELIST = str(DEMUX_DIR / "whitelist.tsv")
 BARCODE_KNEEPLOT = str(DEMUX_DIR / "kneeplot.png")
-BAM_BC_CORR_UMI_UNCORR_TMP = str(DEMUX_DIR / "bc_corr.umi_uncorr.tmp.sorted.bam")
-BAM_BC_CORR_UMI_UNCORR = str(DEMUX_DIR / "bc_corr.umi_uncorr.sorted.bam")
-BAM_BC_CORR_UMI_UNCORR_BAI = str(DEMUX_DIR / "bc_corr.umi_uncorr.sorted.bam.bai")
-BAM_BC_CORR_UMI_UNCORR_GENE_TMP = str(
-    DEMUX_DIR / "bc_corr.umi_uncorr.gene.tmp.sorted.bam"
+
+# Chrom-specific files
+SPLIT_DIR = DEMUX_DIR / "chroms"
+CHROM_BAM_BC_UNCORR = str(SPLIT_DIR / "{chrom}.sorted.bam")
+CHROM_BAM_BC_UNCORR_BAI = str(SPLIT_DIR / "{chrom}.sorted.bam.bai")
+CHROM_BAM_BC_TMP = str(SPLIT_DIR / "{chrom}.bc_assign.tmp.sorted.bam")
+CHROM_BAM_BC = str(SPLIT_DIR / "{chrom}.bc_assign.sorted.bam")
+CHROM_BAM_BC_BAI = str(SPLIT_DIR / "{chrom}.bc_assign.sorted.bam.bai")
+CHROM_ASSIGNED_BARCODE_COUNTS = str(SPLIT_DIR / "{chrom}.assigned_bc_counts.tsv")
+CHROM_BAM_BC_GENE_TMP = str(SPLIT_DIR / "{chrom}.bc_assign.gene.tmp.sorted.bam")
+CHROM_BAM_BC_GENE = str(SPLIT_DIR / "{chrom}.bc_assign.gene.sorted.bam")
+CHROM_BAM_BC_GENE_BAI = str(SPLIT_DIR / "{chrom}.bc_assign.gene.sorted.bam.bai")
+CHROM_BAM_FULLY_TAGGED_TMP = str(SPLIT_DIR / "{chrom}.tagged.tmp.sorted.bam")
+CHROM_BAM_FULLY_TAGGED = str(SPLIT_DIR / "{chrom}.tagged.sorted.bam")
+CHROM_BAM_FULLY_TAGGED_BAI = str(SPLIT_DIR / "{chrom}.tagged.sorted.bam.bai")
+CHROM_FC_READ_ASSIGNS_TMP = str(
+    SPLIT_DIR / "{chrom}.bc_assign.sorted.bam.featureCounts"
 )
-BAM_BC_CORR_UMI_UNCORR_GENE = str(DEMUX_DIR / "bc_corr.umi_uncorr.gene.sorted.bam")
-BAM_BC_CORR_UMI_UNCORR_GENE_BAI = str(
-    DEMUX_DIR / "bc_corr.umi_uncorr.gene.sorted.bam.bai"
-)
-BAM_BC_CORR_UMI_CORR_GENE_TMP = str(DEMUX_DIR / "bc_corr.umi_corr.gene.tmp.sorted.bam")
-BAM_BC_CORR_UMI_CORR_GENE = str(DEMUX_DIR / "bc_corr.umi_corr.gene.sorted.bam")
-BAM_BC_CORR_UMI_CORR_GENE_BAI = str(DEMUX_DIR / "bc_corr.umi_corr.gene.sorted.bam.bai")
+CHROM_FC_READ_ASSIGNS = str(SPLIT_DIR / "{chrom}.read.gene_assigns.tsv")
+CHROM_FC_GENES = str(SPLIT_DIR / "{chrom}.gene_assigned")
+CHROM_FC_SUMMARY = str(SPLIT_DIR / "{chrom}.gene_assigned.summary")
 
-
-###################
-# UMI DEMUX FILES
-###################
-UMI_DIR = OUTPUT_BASE / "{run_id}" / "umis"
-UMI_EXTRACTED_READS = str(UMI_DIR / "reads.bc.umi.fastq")
-
-
-###################
-# FEATURECOUNTS FILES
-###################
-FC_DIR = OUTPUT_BASE / "{run_id}" / "features"
-FC_READ_ASSIGNS_TMP = str(FC_DIR / "bc_corr.umi_uncorr.sorted.bam.featureCounts")
-FC_READ_ASSIGNS = str(FC_DIR / "read.gene_assigns.tsv")
-FC_GENES = str(FC_DIR / "gene_assigned")
-FC_SUMMARY = str(FC_DIR / "gene_assigned.summary")
-
+# Merged files
+BAM_FULLY_TAGGED = str(DEMUX_DIR / "tagged.sorted.bam")
+BAM_FULLY_TAGGED_BAI = str(DEMUX_DIR / "tagged.sorted.bam.bai")
+ASSIGNED_BARCODE_COUNTS = str(DEMUX_DIR / "assigned_bc_counts.tsv")
 
 ###################
 # LIBRARY SATURATION FILES
@@ -102,13 +97,12 @@ SAT_PLOT = str(SAT_DIR / "saturation_curves.png")
 
 ##### include rules #####
 include: "rules/stranding.smk"
-include: "rules/barcodes.smk"
-include: "rules/umis.smk"
 include: "rules/align.smk"
-include: "rules/features.smk"
+include: "rules/process_bams.smk"
 
 
 ##### target rules #####
 rule all:
     input:
         expand(SAT_PLOT, run_id=RUN_IDS),
+        # expand(ASSIGNED_BARCODE_COUNTS, run_id=RUN_IDS),

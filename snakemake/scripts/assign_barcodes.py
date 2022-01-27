@@ -1,4 +1,5 @@
 import argparse
+import collections
 import gzip
 import logging
 import math
@@ -43,12 +44,20 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--output",
+        "--output_bam",
         help="Output BAM file containing aligned reads with tags for uncorrected \
         barcodes (CR), corrected barcodes (CB), barcode QVs (CY), uncorrected \
         UMIs (UR), and UMI QVs (UY) [bc_corr.umi_uncorr.sorted.bam]",
         type=str,
         default="bc_corr.umi_uncorr.sorted.bam",
+    )
+
+    parser.add_argument(
+        "--output_counts",
+        help="Output TSV file containing counts for each of the assigned \
+        barcodes [barcode_counts.tsv]",
+        type=str,
+        default="barcode_counts.tsv",
     )
 
     parser.add_argument(
@@ -146,7 +155,7 @@ def parse_args():
     args = parser.parse_args()
 
     # Create temp dir and add that to the args object
-    p = pathlib.Path(args.output)
+    p = pathlib.Path(args.output_bam)
     tempdir = tempfile.TemporaryDirectory(prefix="tmp.", dir=p.parents[0])
     args.tempdir = tempdir.name
 
@@ -400,12 +409,20 @@ def process_bam_records(tup):
     # Open input BAM file
     bam = pysam.AlignmentFile(input_bam, "rb")
 
-    # Open temporary output BAM file for writing
-    suff = f".{chrom}.bam"
-    chrom_bam = tempfile.NamedTemporaryFile(
-        prefix="tmp.align.", suffix=suff, dir=args.tempdir, delete=False
-    )
-    bam_out = pysam.AlignmentFile(chrom_bam.name, "wb", template=bam)
+    # Write temp file or straight to output file depending on use case
+    if args.threads > 1:
+        # Open temporary output BAM file for writing
+        suff = f".{chrom}.bam"
+        chrom_bam = tempfile.NamedTemporaryFile(
+            prefix="tmp.align.", suffix=suff, dir=args.tempdir, delete=False
+        )
+        bam_out_fn = chrom_bam.name
+    else:
+        bam_out_fn = args.output_bam
+
+    bam_out = pysam.AlignmentFile(args.output_bam, "wb", template=bam)
+
+    barcode_counter = collections.Counter()
 
     for align in bam.fetch(contig=chrom):
         # Make sure each alignment in this BAM has an uncorrected barcode and
@@ -444,11 +461,12 @@ def process_bam_records(tup):
             # barcode and an uncorrected UMI
             if align.has_tag("CB") and align.has_tag("UR"):
                 bam_out.write(align)
+                barcode_counter[bc_match] += 1
 
     bam.close()
     bam_out.close()
 
-    return chrom_bam.name
+    return bam_out_fn, barcode_counter
 
 
 def launch_pool(func, func_args, procs=1):
@@ -578,31 +596,46 @@ def main(args):
     logger.info("Getting BAM statistics")
     n_reads, chroms = get_bam_info(args.bam)
 
-    # Create temporary directory
-    if os.path.exists(args.tempdir):
+    if args.threads > 1:
+        # Create temporary directory
+        if os.path.exists(args.tempdir):
+            shutil.rmtree(args.tempdir)
+        os.mkdir(args.tempdir)
+
+        # Process BAM alignments from each chrom separately
+        logger.info(f"Assigning barcodes to reads in {args.bam}")
+        func_args = []
+        chroms_sorted = dict(sorted(chroms.items(), key=lambda item: item[1]))
+        for chrom in chroms_sorted.keys():
+            func_args.append((args.bam, chrom, args))
+
+        results = launch_pool(process_bam_records, func_args, args.threads)
+        chrom_bam_fns, barcode_counters = zip(*results)
+
+        barcode_counter = sum(barcode_counters, collections.Counter())
+
+        tmp_bam = tempfile.NamedTemporaryFile(
+            prefix="tmp.align.", suffix=".unsorted.bam", dir=args.tempdir, delete=False
+        )
+        merge_parameters = ["-f", tmp_bam.name] + list(chrom_bam_fns)
+        pysam.merge(*merge_parameters)
+
+        pysam.sort("-@", str(args.threads), "-o", args.output_bam, tmp_bam.name)
+
+        logger.info("Cleaning up temporary files")
         shutil.rmtree(args.tempdir)
-    os.mkdir(args.tempdir)
 
-    # Process BAM alignments from each chrom separately
-    logger.info(f"Assigning barcodes to reads in {args.bam}")
-    func_args = []
-    chroms_sorted = dict(sorted(chroms.items(), key=lambda item: item[1]))
-    for chrom in chroms_sorted.keys():
-        func_args.append((args.bam, chrom, args))
+    else:
+        # Hopefully the chromosome name is prefix of BAM filename
+        REGEX = r"([A-Za-z0-9.]+).sorted.bam"
+        m = re.search(REGEX, args.bam)
+        chrom = m.group(1)
+        func_args = (args.bam, chrom, args)
+        chrom_bam_fn, barcode_counter = process_bam_records(func_args)
 
-    chrom_bam_fns = launch_pool(process_bam_records, func_args, args.threads)
-
-    logger.info(f"Writing BAM with CR, CB, CY, UR, and UY tags to {args.output}")
-    tmp_bam = tempfile.NamedTemporaryFile(
-        prefix="tmp.align.", suffix=".unsorted.bam", dir=args.tempdir, delete=False
-    )
-    merge_parameters = ["-f", tmp_bam.name] + list(chrom_bam_fns)
-    pysam.merge(*merge_parameters)
-
-    pysam.sort("-@", str(args.threads), "-o", args.output, tmp_bam.name)
-
-    logger.info("Cleaning up temporary files")
-    shutil.rmtree(args.tempdir)
+    with open(args.output_counts, "w") as f:
+        for bc, n in barcode_counter.most_common():
+            f.write(f"{bc}\t{n}\n")
 
 
 if __name__ == "__main__":

@@ -4,6 +4,7 @@ import logging
 import multiprocessing
 import os
 import pathlib
+import re
 import shutil
 import subprocess
 import sys
@@ -200,14 +201,19 @@ def correct_umis(umis):
 
 def add_tags(chrom, umis, genes, args):
     """ """
-    # Open temporary output BAM file for writing
-    suff = f".{chrom}.bam"
-    chrom_bam = tempfile.NamedTemporaryFile(
-        prefix="tmp.align.", suffix=suff, dir=args.tempdir, delete=False
-    )
+    # Write temp file or straight to output file depending on use case
+    if args.threads > 1:
+        # Open temporary output BAM file for writing
+        suff = f".{chrom}.bam"
+        chrom_bam = tempfile.NamedTemporaryFile(
+            prefix="tmp.align.", suffix=suff, dir=args.tempdir, delete=False
+        )
+        bam_out_fn = chrom_bam.name
+    else:
+        bam_out_fn = args.output
 
     bam = pysam.AlignmentFile(args.bam, "rb")
-    bam_out = pysam.AlignmentFile(chrom_bam.name, "wb", template=bam)
+    bam_out = pysam.AlignmentFile(bam_out_fn, "wb", template=bam)
 
     for align in bam.fetch(chrom):
         read_id = align.query_name
@@ -223,7 +229,7 @@ def add_tags(chrom, umis, genes, args):
     bam.close()
     bam_out.close()
 
-    return chrom_bam.name
+    return bam_out_fn
 
 
 def get_bam_info(bam):
@@ -422,30 +428,41 @@ def main(args):
     init_logger(args)
     n_aligns, chroms = get_bam_info(args.bam)
 
-    # Create temporary directory
-    if os.path.exists(args.tempdir):
+    if args.threads > 1:
+        # Create temporary directory
+        if os.path.exists(args.tempdir):
+            shutil.rmtree(args.tempdir)
+        os.mkdir(args.tempdir)
+
+        logger.info(f"Processing input BAM using {args.threads} threads")
+        func_args = []
+        chroms_sorted = dict(sorted(chroms.items(), key=lambda item: item[1]))
+        for chrom in chroms_sorted.keys():
+            func_args.append((args.bam, chrom, args))
+
+        chrom_bam_fns = launch_pool(process_bam_records, func_args, args.threads)
+
+        logger.info(
+            f"Writing BAM with CR, CB, CY, UR, UB, and UY tags to {args.output}"
+        )
+        tmp_bam = tempfile.NamedTemporaryFile(
+            prefix="tmp.align.", suffix=".unsorted.bam", dir=args.tempdir, delete=False
+        )
+        merge_parameters = ["-f", tmp_bam.name] + list(chrom_bam_fns)
+        pysam.merge(*merge_parameters)
+
+        pysam.sort("-@", str(args.threads), "-o", args.output, tmp_bam.name)
+
+        logger.info("Cleaning up temporary files")
         shutil.rmtree(args.tempdir)
-    os.mkdir(args.tempdir)
 
-    logger.info(f"Processing input BAM using {args.threads} threads")
-    func_args = []
-    chroms_sorted = dict(sorted(chroms.items(), key=lambda item: item[1]))
-    for chrom in chroms_sorted.keys():
-        func_args.append((args.bam, chrom, args))
-
-    chrom_bam_fns = launch_pool(process_bam_records, func_args, args.threads)
-
-    logger.info(f"Writing BAM with CR, CB, CY, UR, UB, and UY tags to {args.output}")
-    tmp_bam = tempfile.NamedTemporaryFile(
-        prefix="tmp.align.", suffix=".unsorted.bam", dir=args.tempdir, delete=False
-    )
-    merge_parameters = ["-f", tmp_bam.name] + list(chrom_bam_fns)
-    pysam.merge(*merge_parameters)
-
-    pysam.sort("-@", str(args.threads), "-o", args.output, tmp_bam.name)
-
-    logger.info("Cleaning up temporary files")
-    shutil.rmtree(args.tempdir)
+    else:
+        # Hopefully the chromosome name is prefix of BAM filename
+        REGEX = r"([A-Za-z0-9.]+).bc_assign.gene.sorted.bam"
+        m = re.search(REGEX, args.bam)
+        chrom = m.group(1)
+        func_args = (args.bam, chrom, args)
+        process_bam_records(func_args)
 
 
 if __name__ == "__main__":
