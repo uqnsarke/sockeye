@@ -9,4 +9,5 @@ dependencies:
   - numpy
   - biopython
   - seqkit
+  - pysam
   - vsearch==2.15.1

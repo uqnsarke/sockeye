@@ -15,7 +15,6 @@ import pandas as pd
 import pysam
 from Bio import SeqIO
 from Bio.Seq import Seq
-from Bio.SeqIO.QualityIO import FastqGeneralIterator
 from Bio.SeqRecord import SeqRecord
 from tqdm import tqdm
 
@@ -182,7 +181,7 @@ def write_adapters_fasta(args):
     SeqIO.write(adapters, args.adapters_fasta, "fasta")
 
 
-def write_tmp_fasta(batch_reads):
+def write_tmp_fasta(batch_reads, args):
     tmp_fasta = tempfile.NamedTemporaryFile(
         prefix="tmp.reads.", suffix=".fasta", dir=args.tempdir, delete=False
     )
@@ -459,7 +458,7 @@ def revcomp_adapter_config(adapters_string):
     return rc_string
 
 
-def write_stranded_fastq(batch_reads, read_info):
+def write_stranded_fastq(batch_reads, read_info, args):
     """ """
     tmp_fastq = tempfile.NamedTemporaryFile(
         prefix="tmp.stranded.", suffix=".fastq", dir=args.tempdir, delete=False
@@ -552,12 +551,12 @@ def process_batch(tup):
     args = tup[1]
 
     # VSEARCH needs a FASTA
-    tmp_fasta = write_tmp_fasta(batch_reads)
+    tmp_fasta = write_tmp_fasta(batch_reads, args)
 
     tmp_vsearch = call_vsearch(tmp_fasta, args)
     read_info, vsearch_cols = parse_vsearch(tmp_vsearch, args)
     if not args.no_fastq:
-        stranded_tmp_fastq = write_stranded_fastq(batch_reads, read_info)
+        stranded_tmp_fastq = write_stranded_fastq(batch_reads, read_info, args)
     else:
         stranded_tmp_fastq = None
     subread_info = get_subread_info(read_info)
@@ -616,7 +615,7 @@ def main(args):
         shutil.copy(tmp_tables[0], args.output_tsv)
 
     if not args.no_fastq:
-        logging.info(f"Writing stranded fastq to {args.output_fastq}")
+        logging.debug(f"Writing stranded fastq to {args.output_fastq}")
         with open(args.output_fastq, "wb") as f_out:
             for tmp_fastq in tmp_fastqs:
                 with open(tmp_fastq, "rb") as f_:
@@ -624,13 +623,13 @@ def main(args):
 
     if args.output_vsearch is not None:
         # Merge temp VSEARCH tables
-        logging.info(f"Writing VSEARCH output to {args.output_vsearch}")
+        logging.debug(f"Writing VSEARCH output to {args.output_vsearch}")
         glob_str = os.path.join(args.tempdir, "*.vsearch.tsv")
         pd.concat(
             [pd.read_csv(d, sep="\t", header=None) for d in glob(glob_str)], axis=0
         ).to_csv(args.output_vsearch, sep="\t", index=False, header=vsearch_cols)
 
-    logging.info("Cleaning up")
+    logging.debug("Cleaning up")
     os.remove(args.adapters_fasta)
     [os.remove(fn) for fn in tmp_tables]
     shutil.rmtree(args.tempdir)

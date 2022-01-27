@@ -104,5 +104,6 @@ include: "rules/process_bams.smk"
 ##### target rules #####
 rule all:
     input:
+        # expand(STRANDED_FQ, run_id=RUN_IDS),
         expand(SAT_PLOT, run_id=RUN_IDS),
         # expand(ASSIGNED_BARCODE_COUNTS, run_id=RUN_IDS),
