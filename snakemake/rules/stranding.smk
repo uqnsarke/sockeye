@@ -5,7 +5,7 @@ checkpoint cp_batch_fastqs:
         dir=directory(COPIED_DIR),
     shell:
         "mkdir -p {output.dir}; "
-        "cp {input.dir}/* {output.dir}/"
+        "find {input.dir}/ -type f -name '*' -exec cp {{}} {output.dir}/ \;"
 
 
 rule call_adapter_scan:
