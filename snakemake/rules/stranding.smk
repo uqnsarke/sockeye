@@ -7,8 +7,7 @@ rule cp_batch_fastqs:
         dir=directory(COPIED_DIR),
     shell:
         "mkdir -p {params.dir}; "
-        "find {input.dir} -type f -name '*' -exec cp {{}} {params.dir}/. \;; "
-        "ls -d {params.dir}/* > {output.fofn}"
+        "ls -d {input.dir}/* > {output.fofn}"
 
 
 checkpoint call_cat_fastq:
