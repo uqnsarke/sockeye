@@ -74,8 +74,12 @@ def load_fofn(fn):
     return input_fastqs
 
 
-def cat_files(chunk_fns, i, args):
+def cat_files(tup):
     """ """
+    chunk_fns = tup[0]
+    i = tup[1]
+    args = tup[2]
+
     out_fn = os.path.join(args.output_dir, f"proc.{i}.fastq.gz")
     with open(out_fn, "wb") as outfile:
         for fname in chunk_fns:
@@ -92,8 +96,21 @@ def main(args):
     os.mkdir(args.output_dir)
 
     chunk_size = int((len(input_fastqs) / args.threads)) + 1
+    func_args = []
     for i, chunk_fns in enumerate(chunks(input_fastqs, chunk_size)):
-        cat_files(chunk_fns, i + 1, args)
+        # cat_files(chunk_fns, i + 1, args)
+        func_args.append((chunk_fns, i + 1, args))
+
+    print(func_args)
+
+    p = multiprocessing.Pool(processes=args.threads)
+    try:
+        results = p.imap(cat_files, func_args)
+        p.close()
+        p.join()
+    except KeyboardInterrupt:
+        p.terminate()
+    return results
 
 
 if __name__ == "__main__":
