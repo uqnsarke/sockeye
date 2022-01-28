@@ -49,14 +49,6 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--output_vsearch",
-        help="If specified, write VSEARCH output to \
-                        <adapters.vsearch.tsv> [None]",
-        type=str,
-        default=None,
-    )
-
-    parser.add_argument(
         "-t", "--threads", help="Threads to use [4]", type=int, default=4
     )
 
@@ -502,6 +494,7 @@ def count_reads(fastq):
     with open_fastq(fastq) as f:
         for line in tqdm(f, unit_scale=0.25, unit=" reads"):
             number_lines += 1
+    f.close()
     return number_lines / 4
 
 
@@ -612,6 +605,9 @@ def main(args):
             f_out.write(">" + str(entry.name) + "\n")
             f_out.write(str(entry.sequence) + "\n")
 
+    # Close these temporary FASTA files
+    [f_out.close() for f_out in fasta_fs.values()]
+
     logging.info("Processing {} batches of {} reads".format(n_batches, args.batch_size))
     func_args = []
     for batch_id, fn in fasta_fns.items():
@@ -637,14 +633,6 @@ def main(args):
         for tmp_fastq in tmp_fastqs:
             with open(tmp_fastq, "rb") as f_:
                 shutil.copyfileobj(f_, f_out)
-
-    if args.output_vsearch is not None:
-        # Merge temp VSEARCH tables
-        logging.info(f"Writing VSEARCH output to {args.output_vsearch}")
-        glob_str = os.path.join(args.tempdir, "*.vsearch.tsv")
-        pd.concat(
-            [pd.read_csv(d, sep="\t", header=None) for d in glob(glob_str)], axis=0
-        ).to_csv(args.output_vsearch, sep="\t", index=False, header=vsearch_cols)
 
     logging.info("Cleaning up")
     os.remove(args.adapters_fasta)

@@ -107,4 +107,5 @@ include: "rules/process_bams.smk"
 rule all:
     input:
         expand(SAT_PLOT, run_id=RUN_IDS),
+        expand(CONFIG_STATS, run_id=RUN_IDS),
         # expand(ASSIGNED_BARCODE_COUNTS, run_id=RUN_IDS),
