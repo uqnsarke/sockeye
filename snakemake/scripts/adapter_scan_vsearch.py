@@ -8,6 +8,8 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
+from collections import defaultdict
 from glob import glob
 
 import numpy as np
@@ -108,14 +110,6 @@ def parse_args():
                         [read1_TSO.fasta]",
         type=str,
         default="read1_TSO.fasta",
-    )
-
-    parser.add_argument(
-        "--no_fastq",
-        help="Do not write the stranded fastqs \
-                        (specified by --output_fastq) [False]",
-        action="store_true",
-        default=False,
     )
 
     parser.add_argument(
@@ -459,29 +453,37 @@ def revcomp_adapter_config(adapters_string):
     return rc_string
 
 
-def write_stranded_fastq(batch_reads, read_info):
+def write_stranded_fastq(batch_reads, read_info, args):
     """ """
     tmp_fastq = tempfile.NamedTemporaryFile(
         prefix="tmp.stranded.", suffix=".fastq", dir=args.tempdir, delete=False
     )
 
+    # Iterate through FASTQ reads and re-write them with proper stranding based
+    # the results of the VSEARCH alignments.
     with open(tmp_fastq.name, mode="w") as f_out:
         for r in batch_reads:
             read_id = r.name.split(" ")[0]
-            for subread_id in read_info[read_id].keys():
-                d = read_info[read_id][subread_id]
-                # subread_info = read_info[read_id][subread_id]
-                subread_seq = str(r.sequence[d["start"] : d["end"]])
-                subread_quals = r.quality[d["start"] : d["end"]]
-                if d["orig_strand"] == "-":
-                    rc_config = revcomp_adapter_config(d["adapter_config"])
-                    d["adapter_config"] = rc_config
-                    subread_seq = subread_seq[::-1].translate(COMPLEMENT_TRANS)
-                    subread_quals = subread_quals[::-1]
-                f_out.write(f"@{subread_id}\n")
-                f_out.write(f"{subread_seq}\n")
-                f_out.write("+\n")
-                f_out.write(f"{subread_quals}\n")
+            if read_info.get(read_id):
+                # This read had some VSEARCH hits for adapter sequences
+                for subread_id in read_info[read_id].keys():
+                    d = read_info[read_id][subread_id]
+                    # subread_info = read_info[read_id][subread_id]
+                    subread_seq = str(r.sequence[d["start"] : d["end"]])
+                    subread_quals = r.quality[d["start"] : d["end"]]
+                    if d["orig_strand"] == "-":
+                        rc_config = revcomp_adapter_config(d["adapter_config"])
+                        d["adapter_config"] = rc_config
+                        subread_seq = subread_seq[::-1].translate(COMPLEMENT_TRANS)
+                        subread_quals = subread_quals[::-1]
+                    f_out.write(f"@{subread_id}\n")
+                    f_out.write(f"{subread_seq}\n")
+                    f_out.write("+\n")
+                    f_out.write(f"{subread_quals}\n")
+            else:
+                # This read had no VSEARCH hits for adapter sequences, so we
+                # should omit this read from the stranded FASTQ output
+                pass
 
     return tmp_fastq.name
 
@@ -548,18 +550,13 @@ def write_tmp_table(tmp_fastq, subread_info):
 
 
 def process_batch(tup):
-    batch_reads = tup[0]
-    args = tup[1]
-
-    # VSEARCH needs a FASTA
-    tmp_fasta = write_tmp_fasta(batch_reads)
+    tmp_fasta = tup[0]
+    batch_reads = tup[1]
+    args = tup[2]
 
     tmp_vsearch = call_vsearch(tmp_fasta, args)
     read_info, vsearch_cols = parse_vsearch(tmp_vsearch, args)
-    if not args.no_fastq:
-        stranded_tmp_fastq = write_stranded_fastq(batch_reads, read_info)
-    else:
-        stranded_tmp_fastq = None
+    stranded_tmp_fastq = write_stranded_fastq(batch_reads, read_info, args)
     subread_info = get_subread_info(read_info)
     tmp_table = write_tmp_table(stranded_tmp_fastq, subread_info)
     return stranded_tmp_fastq, tmp_table, vsearch_cols
@@ -583,9 +580,6 @@ def main(args):
     args.batch_size = min(n_reads, args.batch_size)
     n_batches = int(np.ceil(n_reads / args.batch_size))
 
-    # Open pysam handle to input FASTQ
-    fastq = pysam.FastxFile(args.fastq)
-
     # Create temp directory
     if os.path.exists(args.tempdir):
         shutil.rmtree(args.tempdir)
@@ -594,15 +588,38 @@ def main(args):
     # Write a FASTA file containing the adapter sequences for VSEARCH to use
     write_adapters_fasta(args)
 
-    logging.info("Processing {} batches of {} reads".format(n_batches, args.batch_size))
-    tmp_tables = []
-    with multiprocessing.Pool(args.threads) as p:
-        r = list(
-            tqdm(
-                p.imap(process_batch, batch_iterator(fastq, args)),
-                total=n_batches,
-            )
+    # Create FASTA temp files that we'll write to next
+    fasta_fns = {}
+    fasta_fs = {}
+    for i in range(1, n_batches + 1):
+        tmp_prefix = f"tmp.chunk.{i}."
+        tmp_fasta = tempfile.NamedTemporaryFile(
+            prefix=tmp_prefix, suffix=".fasta", dir=args.tempdir, delete=False
         )
+        fasta_fns[i] = tmp_fasta.name
+        fasta_fs[i] = open(tmp_fasta.name, "w")
+
+    # Stream through entire FASTQ and convert to batched FASTAs for processing
+    batch_id = 1
+    batch_reads = defaultdict(list)
+    with pysam.FastxFile(args.fastq) as f_in:
+        for i, entry in enumerate(f_in):
+            # Increment batch_id after streaming through <args.batch_size> reads
+            if (i > 0) & (i % args.batch_size == 0):
+                batch_id += 1
+            batch_reads[batch_id].append(entry)
+            f_out = fasta_fs[batch_id]
+            f_out.write(">" + str(entry.name) + "\n")
+            f_out.write(str(entry.sequence) + "\n")
+
+    logging.info("Processing {} batches of {} reads".format(n_batches, args.batch_size))
+    func_args = []
+    for batch_id, fn in fasta_fns.items():
+        func_args.append((fn, batch_reads[batch_id], args))
+
+    with multiprocessing.Pool(args.threads) as p:
+        r = list(tqdm(p.imap(process_batch, func_args), total=n_batches))
+
     tmp_fastqs, tmp_tables, vsearch_cols = zip(*r)
     vsearch_cols = vsearch_cols[0]
 
@@ -615,12 +632,11 @@ def main(args):
     else:
         shutil.copy(tmp_tables[0], args.output_tsv)
 
-    if not args.no_fastq:
-        logging.info(f"Writing stranded fastq to {args.output_fastq}")
-        with open(args.output_fastq, "wb") as f_out:
-            for tmp_fastq in tmp_fastqs:
-                with open(tmp_fastq, "rb") as f_:
-                    shutil.copyfileobj(f_, f_out)
+    logging.info(f"Writing stranded fastq to {args.output_fastq}")
+    with open(args.output_fastq, "wb") as f_out:
+        for tmp_fastq in tmp_fastqs:
+            with open(tmp_fastq, "rb") as f_:
+                shutil.copyfileobj(f_, f_out)
 
     if args.output_vsearch is not None:
         # Merge temp VSEARCH tables

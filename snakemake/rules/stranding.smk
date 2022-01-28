@@ -1,16 +1,32 @@
-checkpoint cp_batch_fastqs:
+rule cp_batch_fastqs:
     input:
         dir=lambda wildcards: sample_sheet.loc[wildcards.run_id],
     output:
+        fofn=FOFN,
+    params:
         dir=directory(COPIED_DIR),
     shell:
-        "mkdir -p {output.dir}; "
-        "cp {input.dir}/* {output.dir}/"
+        "mkdir -p {params.dir}; "
+        "find {input.dir} -type f -name '*' -exec cp {{}} {params.dir}/. \;; "
+        "ls -d {params.dir}/* > {output.fofn}"
+
+
+checkpoint call_cat_fastq:
+    input:
+        FOFN,
+    output:
+        dir=directory(CHUNKED_FASTQ_DIR),
+    threads: config["MAX_THREADS"]
+    shell:
+        "python {SCRIPT_DIR}/cat_fastqs.py "
+        "--threads {threads} "
+        "--output_dir {output.dir} "
+        "{input}"
 
 
 rule call_adapter_scan:
     input:
-        COPIED_FILES,
+        CHUNKED_FASTQS,
     output:
         tsv=READ_CONFIG_CHUNKED,
         fastq=STRANDED_FQ_CHUNKED,
@@ -30,7 +46,7 @@ rule call_adapter_scan:
 
 def gather_tsv_files_from_run(wildcards):
     # throw and Exception if checkpoint is pending
-    checkpoint_dir = checkpoints.cp_batch_fastqs.get(**wildcards).output[0]
+    checkpoint_dir = checkpoints.call_cat_fastq.get(**wildcards).output[0]
     return expand(
         READ_CONFIG_CHUNKED,
         run_id=wildcards.run_id,
@@ -56,7 +72,7 @@ rule combine_adapter_tables:
 
 
 def gather_fastq_files_from_run(wildcards):
-    checkpoint_dir = checkpoints.cp_batch_fastqs.get(**wildcards).output[0]
+    checkpoint_dir = checkpoints.call_cat_fastq.get(**wildcards).output[0]
     return expand(
         STRANDED_FQ_CHUNKED,
         run_id=wildcards.run_id,
