@@ -101,8 +101,6 @@ def main(args):
         # cat_files(chunk_fns, i + 1, args)
         func_args.append((chunk_fns, i + 1, args))
 
-    print(func_args)
-
     p = multiprocessing.Pool(processes=args.threads)
     try:
         results = p.imap(cat_files, func_args)
