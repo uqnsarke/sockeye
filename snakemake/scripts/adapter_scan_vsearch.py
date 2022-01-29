@@ -105,13 +105,6 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--dolomite",
-        help="Reads are from Dolomite instead of 10x [False]",
-        action="store_true",
-        default=False,
-    )
-
-    parser.add_argument(
         "--verbosity",
         help="logging level: <=2 logs info, <=3 logs warnings",
         type=int,
@@ -250,25 +243,6 @@ def get_valid_adapter_pair_positions_in_read(read):
     return fl_pairs
 
 
-def filter_dolomite(df):
-    """
-    The read1/TSO adapter alignments are overlapping due
-    to their largely complementary sequences. We need
-    to identify such overlapping alignments and keep
-    only the highest quality alignment.
-    """
-    to_concat = []
-    for read_id, df_ in df.groupby("query"):
-        for field in ["qilo", "qihi"]:
-            df_ = df_.sort_values([field, "id"]).drop_duplicates(
-                subset=field, keep="last"
-            )
-        to_concat.append(df_)
-
-    df = pd.concat([df_ for df_ in to_concat], axis=0)
-    return df
-
-
 def add_entry_to_read_info(
     read_info,
     orig_read_id,
@@ -315,9 +289,6 @@ def parse_vsearch(tmp_vsearch, args):
     ]
 
     df = pd.read_csv(tmp_vsearch, sep="\t", header=None, names=colnames)
-
-    if args.dolomite:
-        df = filter_dolomite(df)
 
     read_info = {}
     for read_id, read in df.groupby("query"):
@@ -497,7 +468,6 @@ def open_fastq(fastq):
 
 
 def count_reads(fastq):
-    logging.info("Counting reads")
     number_lines = 0
     with open_fastq(fastq) as f:
         for line in tqdm(f, unit_scale=0.25, unit=" reads"):
@@ -559,6 +529,7 @@ def process_batch(tup):
     stranded_tmp_fastq = write_stranded_fastq(tmp_fastq, read_info, args)
     subread_info = get_subread_info(read_info)
     tmp_table = write_tmp_table(stranded_tmp_fastq, subread_info)
+
     return stranded_tmp_fastq, tmp_table, vsearch_cols
 
 
@@ -571,20 +542,28 @@ def init_logger(args):
     logging.root.handlers[0].addFilter(lambda x: "NumExpr" not in x.msg)
 
 
-def main(args):
-    init_logger(args)
-    check_vsearch()
+def write_output_table(tmp_tables, args):
+    """ """
+    if len(tmp_tables) > 1:
+        pd.concat([pd.read_csv(d, sep="\t") for d in tmp_tables], axis=0).to_csv(
+            args.output_tsv, sep="\t", index=False
+        )
+    else:
+        shutil.copy(tmp_tables[0], args.output_tsv)
 
-    # If specified batch size is > total number of reads, reduce batch size
-    n_reads = count_reads(args.fastq)
-    args.batch_size = min(n_reads, args.batch_size)
-    n_batches = int(np.ceil(n_reads / args.batch_size))
 
-    # Create temp directory
-    if os.path.exists(args.tempdir):
-        shutil.rmtree(args.tempdir)
-    os.mkdir(args.tempdir)
+def write_output_fastq(tmp_fastqs, args):
+    """ """
+    with open(args.output_fastq, "wb") as f_out:
+        for tmp_fastq in tmp_fastqs:
+            with open(tmp_fastq, "rb") as f_:
+                shutil.copyfileobj(f_, f_out)
 
+    shutil.rmtree(args.tempdir)
+
+
+def write_tmp_fastx_files_for_processing(n_batches, args):
+    """ """
     # Write a FASTA file containing the adapter sequences for VSEARCH to use
     write_adapters_fasta(args)
 
@@ -601,7 +580,7 @@ def main(args):
 
     # Stream through entire input FASTQ and write batched FASTQ files
     batch_id = 1
-    with pysam.FastxFile(args.fastq) as f_in:
+    with pysam.FastxFile(args.fastq, "r") as f_in:
         for i, entry in enumerate(f_in):
             # Increment batch_id after streaming through <args.batch_size> reads
             if (i > 0) & (i % args.batch_size == 0):
@@ -615,6 +594,26 @@ def main(args):
     # Close these temporary FASTQ files
     [f_out.close() for f_out in fastq_fs.values()]
 
+    return fastq_fns
+
+
+def main(args):
+    init_logger(args)
+    check_vsearch()
+
+    # If specified batch size is > total number of reads, reduce batch size
+    logging.debug("Counting reads")
+    n_reads = count_reads(args.fastq)
+    args.batch_size = min(n_reads, args.batch_size)
+    n_batches = int(np.ceil(n_reads / args.batch_size))
+
+    # Create temp directory
+    if os.path.exists(args.tempdir):
+        shutil.rmtree(args.tempdir)
+    os.mkdir(args.tempdir)
+
+    fastq_fns = write_tmp_fastx_files_for_processing(n_batches, args)
+
     logging.info("Processing {} batches of {} reads".format(n_batches, args.batch_size))
     func_args = []
     for batch_id, fn in fastq_fns.items():
@@ -627,24 +626,11 @@ def main(args):
     vsearch_cols = vsearch_cols[0]
 
     # Merge temp tables and fastqs then clean up
-    logging.info(f"Writing output table to {args.output_tsv}")
-    if len(tmp_tables) > 1:
-        pd.concat([pd.read_csv(d, sep="\t") for d in tmp_tables], axis=0).to_csv(
-            args.output_tsv, sep="\t", index=False
-        )
-    else:
-        shutil.copy(tmp_tables[0], args.output_tsv)
+    logging.debug(f"Writing output table to {args.output_tsv}")
+    write_output_table(tmp_tables, args)
 
-    logging.info(f"Writing stranded fastq to {args.output_fastq}")
-    with open(args.output_fastq, "wb") as f_out:
-        for tmp_fastq in tmp_fastqs:
-            with open(tmp_fastq, "rb") as f_:
-                shutil.copyfileobj(f_, f_out)
-
-    logging.info("Cleaning up")
-    os.remove(args.adapters_fasta)
-    [os.remove(fn) for fn in tmp_tables]
-    shutil.rmtree(args.tempdir)
+    logging.debug(f"Writing stranded fastq to {args.output_fastq}")
+    write_output_fastq(tmp_fastqs, args)
 
 
 if __name__ == "__main__":

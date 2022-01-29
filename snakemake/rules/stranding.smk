@@ -4,7 +4,7 @@ rule cp_batch_fastqs:
     output:
         fofn=FOFN,
     params:
-        dir=directory(COPIED_DIR),
+        dir=directory(INGEST_DIR),
     shell:
         "mkdir -p {params.dir}; "
         "find {input.dir} -type f -name '*' > {output.fofn}"

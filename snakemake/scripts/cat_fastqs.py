@@ -78,17 +78,55 @@ def cat_files(tup):
     """ """
     chunk_fns = tup[0]
     i = tup[1]
-    args = tup[2]
+    ext = tup[2]
+    args = tup[3]
 
-    out_fn = os.path.join(args.output_dir, f"proc.{i}.fastq.gz")
-    with open(out_fn, "wb") as outfile:
-        for fname in chunk_fns:
-            with open(fname, "rb") as infile:
-                outfile.write(infile.read())
+    out_fn = os.path.join(args.output_dir, f"proc.{i}.{ext}")
+    if ext.split(".")[-1] == "gz":
+        with open(out_fn, "wb") as outfile:
+            for fname in chunk_fns:
+                with open(fname, "rb") as infile:
+                    outfile.write(infile.read())
+    else:
+        with open(out_fn, "w") as outfile:
+            for fname in chunk_fns:
+                with open(fname, "r") as infile:
+                    outfile.write(infile.read())
+
+
+def get_input_file_ext(input_fastqs, args):
+    """
+    Determine the extension of the FASTQ files listed in
+    the input fofn. We will maintain this extension in
+    the catted output files.
+
+    :param input: List of filenames that will be catted together
+    :type input: list
+    :param args: object containing all supplied arguments
+    :type args: class 'argparse.Namespace'
+    :return: Extension (e.g. filename.<ext>)
+    :rtype: str
+    """
+    ext = set([p.split(".")[-1] for p in input_fastqs])
+    assert len(ext) == 1, f"Unexpected mixture of file extensions in {args.fofn}"
+
+    ext = list(ext)[0]
+
+    if ext == "gz":
+        subext = set([p.split(".")[-2] for p in input_fastqs])
+        assert len(subext) == 1, f"Unexpected mixture of file extensions in {args.fofn}"
+
+        subext = list(subext)[0]
+        ext = f"{subext}.{ext}"
+
+    return ext
 
 
 def main(args):
     input_fastqs = load_fofn(args.fofn)
+
+    # Determine file extension (e.g. ".fastq.gz", ".fastq", ".fq.gz", or ".fq")
+    ext = get_input_file_ext(input_fastqs, args)
 
     # Create output directory
     if os.path.exists(args.output_dir):
@@ -98,8 +136,7 @@ def main(args):
     chunk_size = int((len(input_fastqs) / args.threads)) + 1
     func_args = []
     for i, chunk_fns in enumerate(chunks(input_fastqs, chunk_size)):
-        # cat_files(chunk_fns, i + 1, args)
-        func_args.append((chunk_fns, i + 1, args))
+        func_args.append((chunk_fns, i + 1, ext, args))
 
     p = multiprocessing.Pool(processes=args.threads)
     try:
