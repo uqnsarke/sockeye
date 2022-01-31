@@ -1,4 +1,4 @@
-name: adapter_scan
+name: stranding
 channels:
   - conda-forge
   - bioconda
@@ -9,5 +9,5 @@ dependencies:
   - numpy
   - biopython
   - seqkit
-  - pysam
+  - pysam>=0.16.0
   - vsearch==2.15.1

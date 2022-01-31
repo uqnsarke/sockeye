@@ -188,6 +188,8 @@ rule cluster_umis:
         bai=CHROM_BAM_BC_GENE_BAI,
     output:
         bam=CHROM_BAM_FULLY_TAGGED_TMP,
+    params:
+        interval=config["UMI"]["GENOMIC_INTERVAL"],
     conda:
         "../envs/umis.yml"
     threads: 1
@@ -195,6 +197,7 @@ rule cluster_umis:
         "touch {input.bai}; "
         "python {SCRIPT_DIR}/cluster_umis.py "
         "--threads {threads} "
+        "--ref_interval {params.interval} "
         "--output {output.bam} {input.bam}"
 
 
