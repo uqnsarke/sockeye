@@ -2,7 +2,7 @@ rule extract_barcodes:
     input:
         bam=BAM_SORT,
     output:
-        bam=temp(BAM_BC_UNCORR_TMP),
+        bam=BAM_BC_UNCORR_TMP,
         tsv=BARCODE_COUNTS,
     params:
         barcodes=config["BC_SUPERLIST"],
@@ -29,8 +29,10 @@ rule cleanup_headers_1:
     input:
         BAM_BC_UNCORR_TMP,
     output:
-        bam=temp(BAM_BC_UNCORR),
-        bai=temp(BAM_BC_UNCORR_BAI),
+        # bam=temp(BAM_BC_UNCORR),
+        # bai=temp(BAM_BC_UNCORR_BAI),
+        bam=BAM_BC_UNCORR,
+        bai=BAM_BC_UNCORR_BAI,
     conda:
         "../envs/samtools.yml"
     shell:
@@ -120,43 +122,84 @@ rule cleanup_headers_2:
         "samtools index {output.bam}"
 
 
-rule ont_featureCounts_genes:
+# rule ont_featureCounts_genes:
+#     input:
+#         bam=CHROM_BAM_BC,
+#         bai=CHROM_BAM_BC_BAI,
+#     output:
+#         featureCounts=temp(CHROM_FC_READ_ASSIGNS_TMP),
+#         featureCounts_final=temp(CHROM_FC_READ_ASSIGNS),
+#         gene_assigned=temp(CHROM_FC_GENES),
+#         summary=temp(CHROM_FC_SUMMARY),
+#     params:
+#         rpath=str(SPLIT_DIR),
+#         gtf=config["REF_GTF"],
+#         minQV=config["FEATURECOUNTS"]["MINQV"],
+#     threads: 1
+#     conda:
+#         "../envs/feature_counts.yml"
+#     shell:
+#         "featureCounts "
+#         "-T {threads} "
+#         "-a {params.gtf} "
+#         "-g gene_name "
+#         "-t gene "
+#         "-o {output.gene_assigned} -L "
+#         "-R CORE --primary "
+#         "--Rpath {params.rpath} "
+#         "-F GTF "
+#         "-Q {params.minQV} "
+#         "--largestOverlap "
+#         "{input.bam} "
+#         "&& cp {output.featureCounts} {output.featureCounts_final}"
+
+
+rule bam_to_bed:
     input:
         bam=CHROM_BAM_BC,
         bai=CHROM_BAM_BC_BAI,
     output:
-        featureCounts=temp(CHROM_FC_READ_ASSIGNS_TMP),
-        featureCounts_final=temp(CHROM_FC_READ_ASSIGNS),
-        gene_assigned=temp(CHROM_FC_GENES),
-        summary=temp(CHROM_FC_SUMMARY),
+        bed=CHROM_BED_BC,
+    conda:
+        "../envs/bedtools.yml"
+    shell:
+        "bedtools bamtobed -i {input.bam} > {output.bed}"
+
+
+rule split_gtf_by_chroms:
+    input:
+        config["REF_GTF"],
+    output:
+        CHROM_GTF,
     params:
-        rpath=str(SPLIT_DIR),
-        gtf=config["REF_GTF"],
-        minQV=config["FEATURECOUNTS"]["MINQV"],
+        chrom=lambda w: w.chrom,
+    shell:
+        "cat {input} | "
+        "awk '$1==\"{params.chrom}\" {{print}}' > {output}"
+
+
+rule assign_genes:
+    input:
+        bed=CHROM_BED_BC,
+        chrom_gtf=CHROM_GTF,
+    output:
+        gene_assigned=CHROM_TSV_GENE_ASSIGNS,
+    params:
+        minQV=config["GENE_ASSIGNS"]["MINQV"],
     threads: 1
     conda:
-        "../envs/feature_counts.yml"
+        "../envs/assign_genes.yml"
     shell:
-        "featureCounts "
-        "-T {threads} "
-        "-a {params.gtf} "
-        "-g gene_name "
-        "-t gene "
-        "-o {output.gene_assigned} -L "
-        "-R CORE --primary "
-        "--Rpath {params.rpath} "
-        "-F GTF "
-        "-Q {params.minQV} "
-        "--largestOverlap "
-        "{input.bam} "
-        "&& cp {output.featureCounts} {output.featureCounts_final}"
+        "python {SCRIPT_DIR}/assign_genes.py "
+        "--output {output.gene_assigned} "
+        "{input.bed} {input.chrom_gtf}"
 
 
 rule add_gene_tags_to_bam:
     input:
         bam=CHROM_BAM_BC,
         bai=CHROM_BAM_BC_BAI,
-        fc=CHROM_FC_READ_ASSIGNS,
+        genes=CHROM_TSV_GENE_ASSIGNS,
     output:
         bam=CHROM_BAM_BC_GENE_TMP,
     conda:
@@ -165,7 +208,7 @@ rule add_gene_tags_to_bam:
         "touch {input.bai}; "
         "python {SCRIPT_DIR}/add_gene_tags.py "
         "--output {output.bam} "
-        "{input.bam} {input.fc}"
+        "{input.bam} {input.genes}"
 
 
 rule cleanup_headers_3:
@@ -238,7 +281,7 @@ rule combine_chrom_bams:
     shell:
         "samtools merge -o {output.all} {input}; "
         "samtools index {output.all}; "
-        "rm -rf {params.split_dir}"
+        # "rm -rf {params.split_dir}"
 
 
 # def gather_chrom_barcode_counts(wildcards):

@@ -21,10 +21,10 @@ def parse_args():
     parser.add_argument("bam", help="Sorted BAM file", type=str)
 
     parser.add_argument(
-        "fc",
-        help="FeatureCounts read/gene assignments file. \
-        IMPORTANT: featureCounts must have been run on the same sorted BAM file \
-        that serves as the other input argument.",
+        "gene_assigns",
+        help="TSV read/gene assignments file. \
+        IMPORTANT: reads in the input BAM and gene_assigns file must have the \
+        same order.",
         type=str,
     )
 
@@ -107,19 +107,26 @@ def process_bam_entries(args):
     bam = pysam.AlignmentFile(args.bam, "rb")
     bam_out = pysam.AlignmentFile(args.output, "wb", template=bam)
 
-    logger.info(f"Adding gene tags (GN) to {args.bam}")
-    with open(args.fc, "r") as fc:
-        for align in tqdm(bam.fetch(), total=n_reads):
-            line = fc.readline().strip()
-            fc_id = line.split("\t")[0]
-            fc_gene = line.split("\t")[3]
+    # If input BAM file is empty or there are no gene assignments,
+    # write an empty output BAM file
+    if (n_reads == 0) or (os.path.getsize(args.gene_assigns) == 0):
+        pass
+    else:
+        logger.info(f"Adding gene tags (GN) to {args.bam}")
+        with open(args.gene_assigns, "r") as f:
+            for align in tqdm(bam.fetch(), total=n_reads):
+                line = f.readline().strip()
+                gene_assigns_id = line.split("\t")[0]
+                gene_assigns_gene = line.split("\t")[3]
 
-            assert fc_id == align.query_name, "BAM and featureCounts reads not ordered"
+                assert (
+                    gene_assigns_id == align.query_name
+                ), "BAM and featureCounts reads not ordered"
 
-            # Annotated gene name = GN:Z
-            align.set_tag("GN", fc_gene, value_type="Z")
+                # Annotated gene name = GN:Z
+                align.set_tag("GN", gene_assigns_gene, value_type="Z")
 
-            bam_out.write(align)
+                bam_out.write(align)
 
     bam.close()
     bam_out.close()

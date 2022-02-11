@@ -1,0 +1,8 @@
+name: assign_genes
+channels:
+  - conda-forge
+  - bioconda
+dependencies:
+  - bioframe==0.3.2
+  - numpy
+  - pandas
