@@ -122,38 +122,6 @@ rule cleanup_headers_2:
         "samtools index {output.bam}"
 
 
-# rule ont_featureCounts_genes:
-#     input:
-#         bam=CHROM_BAM_BC,
-#         bai=CHROM_BAM_BC_BAI,
-#     output:
-#         featureCounts=temp(CHROM_FC_READ_ASSIGNS_TMP),
-#         featureCounts_final=temp(CHROM_FC_READ_ASSIGNS),
-#         gene_assigned=temp(CHROM_FC_GENES),
-#         summary=temp(CHROM_FC_SUMMARY),
-#     params:
-#         rpath=str(SPLIT_DIR),
-#         gtf=config["REF_GTF"],
-#         minQV=config["FEATURECOUNTS"]["MINQV"],
-#     threads: 1
-#     conda:
-#         "../envs/feature_counts.yml"
-#     shell:
-#         "featureCounts "
-#         "-T {threads} "
-#         "-a {params.gtf} "
-#         "-g gene_name "
-#         "-t gene "
-#         "-o {output.gene_assigned} -L "
-#         "-R CORE --primary "
-#         "--Rpath {params.rpath} "
-#         "-F GTF "
-#         "-Q {params.minQV} "
-#         "--largestOverlap "
-#         "{input.bam} "
-#         "&& cp {output.featureCounts} {output.featureCounts_final}"
-
-
 rule bam_to_bed:
     input:
         bam=CHROM_BAM_BC,
@@ -284,30 +252,29 @@ rule combine_chrom_bams:
         # "rm -rf {params.split_dir}"
 
 
-# def gather_chrom_barcode_counts(wildcards):
-#     # throw an Exception if checkpoint is pending
-#     checkpoint_dir = checkpoints.split_bam_by_chroms.get(**wildcards).output[0]
-#     return expand(
-#         CHROM_ASSIGNED_BARCODE_COUNTS, # <-- SHOULD BE FINAL SPLIT BAM FILE
-#         run_id=wildcards.run_id,
-#         chrom=glob_wildcards(os.path.join(checkpoint_dir, "{chrom}.sorted.bam")).chrom,
-#     )
-#
-#
-# rule combine_chrom_assigned_barcode_counts:
-#     input:
-#         chroms=gather_chrom_barcode_counts,
-#     output:
-#         all=ASSIGNED_BARCODE_COUNTS,
-#     run:
-#         import pandas as pd
-#
-#         dfs = [pd.read_csv(fn, sep="\t", header=False, names=["barcode", "count"]) \
-#             for fn in input.chroms
-#         ]
-#         df = pd.concat(dfs, axis=0)
-#         df = df.groupby("barcode")["count"].sum()
-#         df.to_csv(output.all, sep="\t", index=False)
+rule construct_expression_matrix:
+    input:
+        bam=BAM_FULLY_TAGGED,
+        bai=BAM_FULLY_TAGGED_BAI,
+    output:
+        tsv=MATRIX_FULL_TSV,
+    conda:
+        "../envs/barcodes.yml"
+    shell:
+        "python {SCRIPT_DIR}/gene_expression.py "
+        "--output {output.tsv} {input.bam}"
+
+
+rule umap_reduce_expression_matrix:
+    input:
+        tsv=MATRIX_FULL_TSV,
+    output:
+        tsv=MATRIX_UMAP_TSV,
+    conda:
+        "../envs/umap.yml"
+    shell:
+        "python {SCRIPT_DIR}/umap_reduce.py "
+        "--output {output.tsv} {input.tsv}"
 
 
 rule umi_gene_saturation:

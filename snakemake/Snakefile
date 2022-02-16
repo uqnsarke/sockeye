@@ -89,6 +89,13 @@ BAM_FULLY_TAGGED_BAI = str(DEMUX_DIR / "tagged.sorted.bam.bai")
 ASSIGNED_BARCODE_COUNTS = str(DEMUX_DIR / "assigned_bc_counts.tsv")
 
 ###################
+# GENE EXPRESSION FILES
+###################
+MATRIX_DIR = OUTPUT_BASE / "{run_id}" / "matrix"
+MATRIX_FULL_TSV = str(MATRIX_DIR / "gene_expression.full.tsv")
+MATRIX_UMAP_TSV = str(MATRIX_DIR / "gene_expression.umap.tsv")
+
+###################
 # LIBRARY SATURATION FILES
 ###################
 SAT_DIR = OUTPUT_BASE / "{run_id}" / "saturation"
@@ -105,6 +112,7 @@ include: "rules/process_bams.smk"
 rule all:
     input:
         # expand(STRANDED_FQ, run_id=RUN_IDS),
-        expand(SAT_PLOT, run_id=RUN_IDS),
         expand(CONFIG_STATS, run_id=RUN_IDS),
+        expand(MATRIX_UMAP_TSV, run_id=RUN_IDS),
+        expand(SAT_PLOT, run_id=RUN_IDS),
         # expand(ASSIGNED_BARCODE_COUNTS, run_id=RUN_IDS),

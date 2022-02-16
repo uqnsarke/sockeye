@@ -1,0 +1,8 @@
+name: umap
+channels:
+  - conda-forge
+  - bioconda
+  - defaults
+dependencies:
+  - pandas==1.4.1
+  - umap-learn==0.5.2
