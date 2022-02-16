@@ -16,6 +16,8 @@ checkpoint call_cat_fastq:
     output:
         dir=directory(CHUNKED_FASTQ_DIR),
     threads: config["MAX_THREADS"]
+    conda:
+        "../envs/stranding.yml"
     shell:
         "python {SCRIPT_DIR}/cat_fastqs.py "
         "--threads {threads} "
