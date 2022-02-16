@@ -52,7 +52,7 @@ def gather_tsv_files_from_run(wildcards):
         READ_CONFIG_CHUNKED,
         run_id=wildcards.run_id,
         batch_id=glob_wildcards(
-            os.path.join(checkpoint_dir, "{batch_id}.fastq.gz")
+            os.path.join(checkpoint_dir, "{batch_id}.fastq")
         ).batch_id,
     )
 
@@ -78,7 +78,7 @@ def gather_fastq_files_from_run(wildcards):
         STRANDED_FQ_CHUNKED,
         run_id=wildcards.run_id,
         batch_id=glob_wildcards(
-            os.path.join(checkpoint_dir, "{batch_id}.fastq.gz")
+            os.path.join(checkpoint_dir, "{batch_id}.fastq")
         ).batch_id,
     )
 

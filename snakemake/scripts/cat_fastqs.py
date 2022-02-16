@@ -6,6 +6,8 @@ import multiprocessing
 import os
 import pathlib
 import shutil
+import subprocess
+import sys
 
 import numpy as np
 import pysam
@@ -64,6 +66,21 @@ def init_logger(args):
     logging.root.handlers[0].addFilter(lambda x: "NumExpr" not in x.msg)
 
 
+def run_subprocess(cmd):
+    """
+    Run OS command and return stdout & stderr
+    """
+    p = subprocess.Popen(
+        cmd,
+        shell=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        encoding="utf-8",
+    )
+    stdout, stderr = p.communicate()
+    return str(stdout), str(stderr)
+
+
 def chunks(lst, n):
     """Yield successive n-sized chunks from lst."""
     for i in range(0, len(lst), n):
@@ -107,21 +124,19 @@ def load_fofn(fn):
     return input_fastqs
 
 
-def open_fastq(fastq):
-    if fastq.split(".")[-1] == "gz":
-        f = gzip.open(fastq, "rt")
-    else:
-        f = open(fastq)
-    return f
-
-
 def count_reads(fastq):
-    number_lines = 0
-    with open_fastq(fastq) as f:
-        for line in tqdm(f, unit_scale=0.25, unit=" reads"):
-            number_lines += 1
-    f.close()
-    return int(number_lines / 4)
+    """
+    Assumes a 4-line FASTQ. Uses grep or zgrep to count the number of lines and
+    divides by four to get the read count.
+    """
+    if fastq.split(".")[-1] == "gz":
+        prog = "zgrep"
+    else:
+        prog = "grep"
+
+    CMD = f"{prog} -c ^ {fastq}"
+    stdout, stderr = run_subprocess(CMD)
+    return int(int(stdout.strip()) / 4)
 
 
 def cat_files(tup):
@@ -131,11 +146,11 @@ def cat_files(tup):
     ext = tup[2]
     args = tup[3]
 
-    out_fn = os.path.join(args.output_dir, f"proc.{i}.{ext}")
+    out_fn = os.path.join(args.output_dir, f"proc.{i}.fastq")
     if ext.split(".")[-1] == "gz":
         with open(out_fn, "wb") as outfile:
             for fname in chunk_fns:
-                with open(fname, "rb") as infile:
+                with gzip.open(fname, "rb") as infile:
                     outfile.write(infile.read())
     else:
         with open(out_fn, "w") as outfile:
@@ -157,26 +172,18 @@ def get_input_file_ext(input_fastqs, args):
     :return: Extension (e.g. filename.<ext>)
     :rtype: str
     """
-    if len(input_fastqs) > 1:
-        ext = set([p.split(".")[-1] for p in input_fastqs])
-        assert len(ext) == 1, f"Unexpected mixture of file extensions in {args.fofn}"
+    assert len(input_fastqs) > 0, "Input fofn is empty!"
 
-        ext = list(ext)[0]
+    ext = set([p.split(".")[-1] for p in input_fastqs])
+    assert len(ext) == 1, "Unexpected mixture of file extensions in FOFN"
+    ext = list(ext)[0]
 
-        if ext == "gz":
-            subext = set([p.split(".")[-2] for p in input_fastqs])
-            assert (
-                len(subext) == 1
-            ), f"Unexpected mixture of file extensions in {args.fofn}"
+    if ext == "gz":
+        subext = set([p.split(".")[-2] for p in input_fastqs])
+        assert len(subext) == 1, "Unexpected mixture of file extensions in FOFN"
 
-            subext = list(subext)[0]
-            ext = f"{subext}.{ext}"
-
-    elif len(input_fastqs) == 1:
-        ext = input_fastqs[0].split(".")[-1]
-        if ext == "gz":
-            subext = input_fastqs[0].split(".")[-2]
-            ext = f"{subext}.{ext}"
+        subext = list(subext)[0]
+        ext = f"{subext}.{ext}"
 
     return ext
 
@@ -195,8 +202,9 @@ def main(args):
     os.mkdir(args.output_dir)
 
     if len(input_fastqs) > args.threads:
-        # There are many batched fastqs, so combine them into N=<args.threads>
-        # files for efficient downstream processing. Makes use of multiprocessing
+        # There are more input fastqs than available threads, so combine them
+        # into N=<args.threads> files for efficient downstream processing.
+        # Makes use of multiprocessing.
         chunk_size = int((len(input_fastqs) / args.threads)) + 1
         func_args = []
         for i, chunk_fns in enumerate(chunks(input_fastqs, chunk_size)):
@@ -211,50 +219,71 @@ def main(args):
             p.terminate()
 
     elif len(input_fastqs) < args.threads:
-        # There are less input files than available threads, so split them up
-        # into N=<args.threads> files for efficient downstream processing
-        # 1. Cat the files together
+        # There are fewer input FASTQs than available threads, so split them up
+        # into N=<args.threads> FASTQs for efficient downstream processing.
+        #
+        # Steps:
+        # 1. Cat the FASTQs together (unless there is a single input FASTQ)
         # 2. Count the reads
-        # 3. Split combined file into N=args.threads chunks
+        # 3. Split combined FASTQ into N=args.threads chunks
         if len(input_fastqs) == 1:
+            # There is a single input FASTQ, so no need to combine input FASTQs
             tmp_combined_fn = input_fastqs[0]
+
         else:
+            # There are multiple input FASTQs, so first combine them
             tmp_combined_fn = os.path.join(args.output_dir, "tmp.combined.fastq")
             if ext.split(".")[-1] == "gz":
+                # Combine gzipped FASTQs into a single, non-gzipped FASTQ
                 with open(tmp_combined_fn, "wb") as outfile:
                     for fname in input_fastqs:
                         with gzip.open(fname, "rb") as infile:
                             for line in infile:
                                 outfile.write(line)
             else:
+                # Combine non-gzipped FASTQs into a single file
                 with open(tmp_combined_fn, "w") as outfile:
                     for fname in input_fastqs:
                         with open(fname, "r") as infile:
                             for line in infile:
                                 outfile.write(line)
 
-        logger.info("Counting total reads")
         n_reads = count_reads(tmp_combined_fn)
         chunk_size = int(np.ceil(n_reads / args.threads))
 
+        # Initialize FASTQ iterator using pysam
         read_iterator = pysam.FastxFile(tmp_combined_fn)
 
-        for i, chunk_reads in enumerate(batch_iterator(read_iterator, chunk_size)):
-            out_fn = os.path.join(args.output_dir, f"proc.{i}.fastq")
-            with open(out_fn, "w") as outfile:
-                for read in chunk_reads:
-                    outfile.write(f"@{read.name}\n")
-                    outfile.write(f"{read.sequence}\n")
-                    outfile.write("+\n")
-                    outfile.write(f"{read.quality}\n")
-        os.remove(tmp_combined_fn)
+        n_chunks = int(n_reads / chunk_size)
+        f_dict = {}
+        for batch in range(n_chunks):
+            batch_fn = os.path.join(args.output_dir, f"proc.{batch}.fastq")
+            f_dict[batch] = open(batch_fn, "w")
+
+        for i, read in enumerate(read_iterator):
+            batch = int(np.floor(i / chunk_size))
+            outfile = f_dict[batch]
+            outfile.write(f"@{read.name}\n")
+            outfile.write(f"{read.sequence}\n")
+            outfile.write("+\n")
+            outfile.write(f"{read.quality}\n")
+
+        [f.close() for f in f_dict.values()]
+        if len(input_fastqs) > 1:
+            os.remove(tmp_combined_fn)
 
     else:
         # There are already N=<args.threads> input files, so just copy them into
-        # the output directory for downstream processing
+        # the output directory for downstream processing. Unzip them if they are
+        # gzipped.
         for i, fn in enumerate(input_fastqs):
-            dest_fn = os.path.join(args.output_dir, f"proc.{i}.{ext}")
-            shutil.copy(fn, dest_fn)
+            dest_fn = os.path.join(args.output_dir, f"proc.{i}.fastq")
+            if ext == "gz":
+                with gzip.open(fn, "rb") as f_in:
+                    with open(dest_fn, "wb") as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+            else:
+                shutil.copy(fn, dest_fn)
 
 
 if __name__ == "__main__":
