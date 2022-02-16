@@ -216,19 +216,23 @@ def main(args):
         # 1. Cat the files together
         # 2. Count the reads
         # 3. Split combined file into N=args.threads chunks
-        tmp_combined_fn = os.path.join(args.output_dir, f"tmp.combined.{ext}")
-        if ext.split(".")[-1] == "gz":
-            with gzip.open(tmp_combined_fn, "wb") as outfile:
-                for fname in input_fastqs:
-                    with gzip.open(fname, "rb") as infile:
-                        for line in infile:
-                            outfile.write(line)
+        if len(input_fastqs) == 1:
+            tmp_combined_fn = input_fastqs[0]
         else:
-            with open(tmp_combined_fn, "w") as outfile:
-                for fname in input_fastqs:
-                    with open(fname, "r") as infile:
-                        for line in infile:
-                            outfile.write(line)
+            tmp_combined_fn = os.path.join(args.output_dir, "tmp.combined.fastq")
+            if ext.split(".")[-1] == "gz":
+                with open(tmp_combined_fn, "wb") as outfile:
+                    for fname in input_fastqs:
+                        with gzip.open(fname, "rb") as infile:
+                            for line in infile:
+                                outfile.write(line)
+            else:
+                with open(tmp_combined_fn, "w") as outfile:
+                    for fname in input_fastqs:
+                        with open(fname, "r") as infile:
+                            for line in infile:
+                                outfile.write(line)
+
         logger.info("Counting total reads")
         n_reads = count_reads(tmp_combined_fn)
         chunk_size = int(np.ceil(n_reads / args.threads))
