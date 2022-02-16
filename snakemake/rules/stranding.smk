@@ -7,7 +7,7 @@ rule cp_batch_fastqs:
         dir=directory(INGEST_DIR),
     shell:
         "mkdir -p {params.dir}; "
-        "find {input.dir} -type f -name '*' > {output.fofn}"
+        "find -L {input.dir} -type f -name '*' > {output.fofn}"
 
 
 checkpoint call_cat_fastq:
