@@ -240,7 +240,7 @@ def main(args):
         read_iterator = pysam.FastxFile(tmp_combined_fn)
 
         for i, chunk_reads in enumerate(batch_iterator(read_iterator, chunk_size)):
-            out_fn = os.path.join(args.output_dir, f"proc.{i}.{ext}")
+            out_fn = os.path.join(args.output_dir, f"proc.{i}.fastq")
             with open(out_fn, "w") as outfile:
                 for read in chunk_reads:
                     outfile.write(f"@{read.name}\n")
