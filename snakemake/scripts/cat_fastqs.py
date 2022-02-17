@@ -254,9 +254,8 @@ def main(args):
         # Initialize FASTQ iterator using pysam
         read_iterator = pysam.FastxFile(tmp_combined_fn)
 
-        n_chunks = int(n_reads / chunk_size)
         f_dict = {}
-        for batch in range(n_chunks):
+        for batch in range(args.threads):
             batch_fn = os.path.join(args.output_dir, f"proc.{batch}.fastq")
             f_dict[batch] = open(batch_fn, "w")
 
