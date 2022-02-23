@@ -232,7 +232,9 @@ def gather_chrom_bams(wildcards):
     return expand(
         CHROM_BAM_FULLY_TAGGED,  # <-- SHOULD BE FINAL SPLIT BAM FILE
         run_id=wildcards.run_id,
-        chrom=glob_wildcards(os.path.join(checkpoint_dir, "{chrom}.sorted.bam")).chrom,
+        chrom=glob_wildcards(
+            os.path.join(checkpoint_dir, "{chrom, r'\w+(\.\d+)?'}.sorted.bam")
+        ).chrom,
     )
 
 
@@ -257,7 +259,7 @@ rule construct_expression_matrix:
         bam=BAM_FULLY_TAGGED,
         bai=BAM_FULLY_TAGGED_BAI,
     output:
-        tsv=MATRIX_FULL_TSV,
+        tsv=MATRIX_COUNTS_TSV,
     conda:
         "../envs/barcodes.yml"
     shell:
@@ -265,9 +267,30 @@ rule construct_expression_matrix:
         "--output {output.tsv} {input.bam}"
 
 
+rule process_expression_matrix:
+    input:
+        tsv=MATRIX_COUNTS_TSV,
+    output:
+        tsv=MATRIX_PROCESSED_TSV,
+    params:
+        min_genes=config["MATRIX"]["MIN_GENES"],
+        min_cells=config["MATRIX"]["MIN_CELLS"],
+        max_mito=config["MATRIX"]["MAX_MITO"],
+        norm_count=config["MATRIX"]["NORM_COUNT"],
+    conda:
+        "../envs/barcodes.yml"
+    shell:
+        "python {SCRIPT_DIR}/process_matrix.py "
+        "--min_genes {params.min_genes} "
+        "--min_cells {params.min_cells} "
+        "--max_mito {params.max_mito} "
+        "--norm_count {params.norm_count} "
+        "--output {output.tsv} {input.tsv}"
+
+
 rule umap_reduce_expression_matrix:
     input:
-        tsv=MATRIX_FULL_TSV,
+        tsv=MATRIX_PROCESSED_TSV,
     output:
         tsv=MATRIX_UMAP_TSV,
     conda:

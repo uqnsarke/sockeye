@@ -92,7 +92,8 @@ ASSIGNED_BARCODE_COUNTS = str(DEMUX_DIR / "assigned_bc_counts.tsv")
 # GENE EXPRESSION FILES
 ###################
 MATRIX_DIR = OUTPUT_BASE / "{run_id}" / "matrix"
-MATRIX_FULL_TSV = str(MATRIX_DIR / "gene_expression.full.tsv")
+MATRIX_COUNTS_TSV = str(MATRIX_DIR / "gene_expression.counts.tsv")
+MATRIX_PROCESSED_TSV = str(MATRIX_DIR / "gene_expression.processed.tsv")
 MATRIX_UMAP_TSV = str(MATRIX_DIR / "gene_expression.umap.tsv")
 
 ###################
@@ -109,7 +110,7 @@ include: "rules/process_bams.smk"
 
 
 wildcard_constraints:
-    chrom=r"\w+(\.\d+)?"
+    chrom=r"\w+(\.\d+)?",
 
 
 ##### target rules #####
