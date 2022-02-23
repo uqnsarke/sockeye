@@ -108,6 +108,10 @@ include: "rules/align.smk"
 include: "rules/process_bams.smk"
 
 
+wildcard_constraints:
+    chrom=r"\w+(\.\d+)?"
+
+
 ##### target rules #####
 rule all:
     input:
