@@ -47,7 +47,15 @@ def parse_args():
         "-g",
         "--genes",
         help="List of genes to annotate in UMAP plots, separated by commas \
-        (e.g. --genes='CD38,ZPR1,ABT1') [None]",
+        (e.g. --genes=CD19,CD38,CD27) [None]",
+        type=str,
+        default=None,
+    )
+
+    parser.add_argument(
+        "-t",
+        "--target_cells",
+        help="List of cells to highlight in UMAP plots [None]",
         type=str,
         default=None,
     )
@@ -93,7 +101,7 @@ def remove_top_right_axes(ax):
 def scatterplot(df, values, args):
     """ """
     fig = plt.figure(figsize=[8, 8])
-    ax = fig.add_axes([0.06, 0.03, 0.9, 0.9])
+    ax = fig.add_axes([0.08, 0.08, 0.85, 0.85])
 
     if values.name == "total":
         cmap = cm.jet
@@ -112,13 +120,19 @@ def scatterplot(df, values, args):
 
     remove_top_right_axes(ax)
 
-    n_cells = df.shape[0]
-    title = f"{n_cells} cells: {values.name}"
-    ax.set_title(title)
-
     plt.xlim([df["D1"].min() - 1, df["D1"].max() + 1])
     plt.ylim([df["D2"].min() - 1, df["D2"].max() + 1])
-    plt.colorbar(plot)
+
+    n_cells = df.shape[0]
+    if values.name == "highlight":
+        title = f"{n_cells} cells: highlighted cells from {args.target_cells}"
+    else:
+        title = f"{n_cells} cells: {values.name}"
+        plt.colorbar(plot)
+
+    ax.set_title(title)
+    ax.set_xlabel("UMAP-1")
+    ax.set_ylabel("UMAP-2")
 
     fn = f"{args.output_prefix}.{values.name}.png"
     plt.savefig(fn)
@@ -161,6 +175,21 @@ def main(args):
         logger.info(f"Plotting UMAP with {feature} annotation")
 
         values = df_annot.loc[:, feature]
+        scatterplot(df, values, args)
+
+    if args.target_cells:
+        logger.info(f"Plotting UMAP with highlighted cells from {args.target_cells}")
+
+        df_highlight = pd.read_csv(args.target_cells, header=None, names=["barcode"])
+        df_highlight["barcode"] = df_highlight["barcode"].str.split(
+            "-", n=0, expand=True
+        )
+        df_highlight["highlight"] = "red"
+        df_highlight = df_highlight.set_index("barcode")
+        df_highlight = pd.merge(df, df_highlight, on="barcode", how="left").fillna(
+            "lightgray"
+        )
+        values = df_highlight.loc[:, "highlight"]
         scatterplot(df, values, args)
 
 

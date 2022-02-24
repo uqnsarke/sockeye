@@ -18,6 +18,10 @@ rule get_chrom_sizes:
         "cut -f1,2 {input.genome} | sort -V > {output.chrsizes}"
 
 
+def get_split_ont_align_mem_gb(wildcards, threads):
+    return config["RESOURCES"]["MINIMAP2_MEM_GB"] / threads
+
+
 rule align_to_ref:
     input:
         fastq=STRANDED_FQ,
@@ -31,6 +35,8 @@ rule align_to_ref:
     params:
         ref=config["REF_GENOME_FASTA"],
     threads: config["MAX_THREADS"]
+    resources:
+        mem_gb=get_split_ont_align_mem_gb,
     conda:
         "../envs/minimap2.yml"
     shell:
