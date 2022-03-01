@@ -34,7 +34,7 @@ rule align_to_ref:
         sort_bam_bai=BAM_SORT_BAI,
     params:
         ref=config["REF_GENOME_FASTA"],
-    threads: config["MAX_THREADS"]
+    threads: config["RESOURCES"]["MINIMAP2_MAX_THREADS"]
     resources:
         mem_gb=get_split_ont_align_mem_gb,
     conda:
