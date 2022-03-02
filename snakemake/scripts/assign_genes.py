@@ -30,12 +30,6 @@ def parse_args():
         type=str,
     )
 
-    # parser.add_argument(
-    #     "unmapped_reads",
-    #     help="List of unmapped reads from the BAM",
-    #     type=str,
-    # )
-
     # Optional arguments
     parser.add_argument(
         "-q",
@@ -52,6 +46,13 @@ def parse_args():
         default="./read_annotations.tsv",
     )
 
+    parser.add_argument(
+        "-c",
+        "--chunk_size",
+        help="BED alignments per chunk to process [200000]",
+        type=int,
+        default=200000,
+    )
     parser.add_argument(
         "--verbosity",
         help="logging level: <=2 logs info, <=3 logs warnings",
@@ -116,22 +117,11 @@ def load_bed(args):
         assert bf.is_bedframe(df), "BED file not loading as a valid dataframe!"
 
     df["aln_len"] = df["end"] - df["start"]
-    return df
 
-
-def load_unmapped_reads(args):
-    """ """
-    cols = ["row_read", "chrom", "start"]
-    df = pd.read_csv(
-        args.unmapped_reads, sep="\t", header=None, usecols=["row_read"], names=cols
-    )
-    df[["index_bed", "read"]] = df["row_read"].str.split(":", expand=True)
-    df = df.drop("row_read", axis=1)
-    df["status"] = "Unassigned_unmapped"
-    df["score"] = 0
-    df["gene"] = "NA"
-    # Switch from 1-index to 0-index
-    df["index_bed"] = df["index_bed"].astype(int) - 1
+    # If duplicate entries, keep only the hit with top mapping qv. If they are
+    # equal (should be very rare), just keep the first.
+    df = df.sort_values(["name", "score"], ascending = (True, False))
+    df = df.drop_duplicates(subset=["name"], keep="first")
     return df
 
 
@@ -166,12 +156,6 @@ def assign_status_no_features(df):
     """
     df.loc[df["gene"] == 0, "status"] = "Unassigned_no_features"
     df.loc[df["gene"] == 0, "gene"] = "NA"
-    return df
-
-
-def assign_status_unmapped(df):
-    """ """
-
     return df
 
 
@@ -233,36 +217,54 @@ def get_overlaps(bed, gtf):
     return df
 
 
+def process_bed_chunk(bed_chunk, gtf, args):
+    """
+
+    """
+    # The bed file has alignments and the chromosome has annotations,
+    # so process the overlaps
+    df_chunk = get_overlaps(bed_chunk, gtf)
+    df_chunk["status"] = "Unknown"
+    df_chunk = assign_status_low_mapq(df_chunk, args)
+    df_chunk = assign_status_ambiguous_overlap(df_chunk)
+    df_chunk = assign_status_no_features(df_chunk)
+    df_chunk = find_largest_overlap(df_chunk)
+
+    df_chunk = df_chunk[["read", "status", "score", "gene", "index_bed"]]
+
+    df_chunk = df_chunk.reset_index(drop=True)
+    # print(df_chunk.groupby("status")["index_bed"].nunique())
+    df_chunk = df_chunk.drop(["index_bed"], axis=1)
+
+    return df_chunk
+
+
 def main(args):
     pd.set_option("display.max_rows", None)
     gtf = load_gtf(args)
     bed = load_bed(args)
 
+    ext = args.output.split(".")[-1]
     if (bed.shape[0] > 0) & (gtf.shape[0] > 0):
-        # The bed file has alignments and the chromosome has annotations,
-        # so process the overlaps
-        df = get_overlaps(bed, gtf)
+        # Process alignment overlaps in chunks of <args.chunk_size> alignments
+        n = int(np.ceil(bed.shape[0] / args.chunk_size))
+        chunk_fns = []
+        for i,bed_chunk in enumerate(np.array_split(bed, n)):
+            df_chunk = process_bed_chunk(bed_chunk, gtf, args)
 
-        df["status"] = "Unknown"
-        df = assign_status_low_mapq(df, args)
-        df = assign_status_ambiguous_overlap(df)
-        df = assign_status_no_features(df)
-        # df = assign_status_unmapped(df)
-        df = find_largest_overlap(df)
+            fn = args.output.replace(ext, f"{i}.{ext}")
+            chunk_fns.append(fn)
+            df_chunk.to_csv(fn, sep="\t", index=False, header=False)
 
-        df = df[["read", "status", "score", "gene", "index_bed"]]
+        # Concatenate chunked output files
+        with open(args.output, "w") as f_out:
+            for fn in chunk_fns:
+                with open(fn) as f_in:
+                    for line in f_in:
+                        f_out.write(line)
 
-        # Now add the unmapped reads from the end of the BAM
-        # unmapped = load_unmapped_reads(args)
-        # df = pd.concat([df, unmapped], axis=0)
-
-        df = df.reset_index(drop=True)
-        # print(df.head(500))
-        # print(df.tail(500))
-        print(df.groupby("status")["index_bed"].nunique())
-        df = df.drop(["index_bed"], axis=1)
-
-        df.to_csv(args.output, sep="\t", index=False, header=False)
+        # Clean up chunked files
+        [os.remove(fn) for fn in chunk_fns]
 
     else:
         # The bed file contained no alignments or the chromosome does not
