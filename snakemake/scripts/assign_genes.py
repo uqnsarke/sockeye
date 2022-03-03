@@ -118,10 +118,6 @@ def load_bed(args):
 
     df["aln_len"] = df["end"] - df["start"]
 
-    # If duplicate entries, keep only the hit with top mapping qv. If they are
-    # equal (should be very rare), just keep the first.
-    df = df.sort_values(["name", "score"], ascending = (True, False))
-    df = df.drop_duplicates(subset=["name"], keep="first")
     return df
 
 
@@ -218,9 +214,7 @@ def get_overlaps(bed, gtf):
 
 
 def process_bed_chunk(bed_chunk, gtf, args):
-    """
-
-    """
+    """ """
     # The bed file has alignments and the chromosome has annotations,
     # so process the overlaps
     df_chunk = get_overlaps(bed_chunk, gtf)
@@ -249,7 +243,7 @@ def main(args):
         # Process alignment overlaps in chunks of <args.chunk_size> alignments
         n = int(np.ceil(bed.shape[0] / args.chunk_size))
         chunk_fns = []
-        for i,bed_chunk in enumerate(np.array_split(bed, n)):
+        for i, bed_chunk in enumerate(np.array_split(bed, n)):
             df_chunk = process_bed_chunk(bed_chunk, gtf, args)
 
             fn = args.output.replace(ext, f"{i}.{ext}")

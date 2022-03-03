@@ -59,21 +59,6 @@ def init_logger(args):
     logging.root.handlers[0].addFilter(lambda x: "NumExpr" not in x.msg)
 
 
-def run_subprocess(cmd):
-    """
-    Run OS command and return stdout & stderr
-    """
-    p = subprocess.Popen(
-        cmd,
-        shell=True,
-        stderr=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        universal_newlines=True,
-    )
-    stdout, stderr = p.communicate()
-    return str(stdout), str(stderr)
-
-
 def get_bam_info(bam):
     """
     Use `samtools idxstat` to get number of alignments and names of all contigs

@@ -458,7 +458,7 @@ def main(args):
 
     else:
         # Hopefully the chromosome name is prefix of BAM filename
-        REGEX = r"([A-Za-z0-9.]+).bc_assign.gene.sorted.bam"
+        REGEX = r"([A-Za-z0-9.]+).bc_assign.gene.bam"
         m = re.search(REGEX, args.bam)
         chrom = m.group(1)
         func_args = (args.bam, chrom, args)

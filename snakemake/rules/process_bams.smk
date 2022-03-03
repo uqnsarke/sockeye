@@ -233,7 +233,7 @@ def gather_chrom_bams(wildcards):
         CHROM_BAM_FULLY_TAGGED,  # <-- SHOULD BE FINAL SPLIT BAM FILE
         run_id=wildcards.run_id,
         chrom=glob_wildcards(
-            #os.path.join(checkpoint_dir, "{chrom, r'\w+(\.\d+)?'}.sorted.bam")
+            # os.path.join(checkpoint_dir, "{chrom, r'\w+(\.\d+)?'}.sorted.bam")
             os.path.join(checkpoint_dir, "{chrom}.sorted.bam")
         ).chrom,
     )
