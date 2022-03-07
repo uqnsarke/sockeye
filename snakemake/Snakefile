@@ -1,26 +1,60 @@
 import pathlib
 import os
+import gzip
+import shutil
 import pandas as pd
 from glob import glob
 from itertools import product
 from snakemake.utils import validate, min_version
 
 
-##### load config and sample sheets #####
+##### load config and point to scripts #####
 configfile: "config/config.yml"
 
 
 SCRIPT_DIR = srcdir("scripts")
-sample_sheet = pd.read_csv(config["runs"], sep=",", comment="#").set_index(
-    "run_id", drop=True
-)
-
-##### set filenames #####
-OUTPUT_BASE = pathlib.Path(config["OUTPUT_BASE"])
 
 
-##### read values from sample sheet ####
+#######################
+# Validate config.yml #
+#######################
+if not config.get("RUNS"):
+    raise Exception("Please define RUNS in the ./config/config.yml")
+elif not os.path.exists(config["RUNS"]):
+    raise Exception("Path specified for RUNS in config.yml not found!")
+sample_sheet = pd.read_csv(
+    config.get("RUNS", "./config/runs.csv"), sep=",", comment="#"
+).set_index("run_id", drop=True)
 RUN_IDS = sample_sheet.index
+
+if not config.get("BC_SUPERLIST"):
+    raise Exception("Please define BC_SUPERLIST in the ./config/config.yml")
+elif not os.path.exists(config["BC_SUPERLIST"]):
+    raise Exception("Path specified for BC_SUPERLIST in config.yml not found!")
+else:
+    if ".gz" in config.get("BC_SUPERLIST"):
+        # Extract the gzipped file and update config dict
+        with gzip.open(config.get("BC_SUPERLIST"), "rb") as f_in:
+            with open(config.get("BC_SUPERLIST").replace(".gz", ""), "wb") as f_out:
+                shutil.copyfileobj(f_in, f_out)
+        config["BC_SUPERLIST"] = config.get("BC_SUPERLIST").replace(".gz", "")
+
+if not config.get("REF_GENOME_FASTA"):
+    raise Exception("Please define REF_GENOME_FASTA in the ./config/config.yml")
+elif not os.path.exists(config["REF_GENOME_FASTA"]):
+    raise Exception("Path specified for REF_GENOME_FASTA in config.yml not found!")
+
+if not config.get("REF_GTF"):
+    raise Exception("Please define REF_GTF in the ./config/config.yml")
+elif not os.path.exists(config["REF_GTF"]):
+    raise Exception("Path specified for REF_GTF in config.yml not found!")
+REF_GENES_GTF = pathlib.Path(config["REF_GTF"])
+
+PLOT_GENES = config.get("UMAP_PLOT_GENES", None).split(",")
+
+
+##### Set output location #####
+OUTPUT_BASE = pathlib.Path(config.get("OUTPUT_BASE", "./output"))
 
 
 ###################
@@ -41,7 +75,6 @@ CONFIG_STATS = str(ADAPTERS_DIR / "configs.stats.json")
 ###################
 # REF ALIGN FILES
 ###################
-REF_GENES_GTF = pathlib.Path(config["REF_GTF"])
 REF_GENES_DIR = REF_GENES_GTF.parents[0]
 REF_GENES_BED = str(REF_GENES_DIR / f'{REF_GENES_GTF.name.replace(".gtf", ".bed")}')
 ALIGN_DIR = OUTPUT_BASE / "{run_id}" / "align"
@@ -88,6 +121,7 @@ BAM_FULLY_TAGGED = str(DEMUX_DIR / "tagged.sorted.bam")
 BAM_FULLY_TAGGED_BAI = str(DEMUX_DIR / "tagged.sorted.bam.bai")
 ASSIGNED_BARCODE_COUNTS = str(DEMUX_DIR / "assigned_bc_counts.tsv")
 
+
 ###################
 # GENE EXPRESSION FILES
 ###################
@@ -95,6 +129,9 @@ MATRIX_DIR = OUTPUT_BASE / "{run_id}" / "matrix"
 MATRIX_COUNTS_TSV = str(MATRIX_DIR / "gene_expression.counts.tsv")
 MATRIX_PROCESSED_TSV = str(MATRIX_DIR / "gene_expression.processed.tsv")
 MATRIX_UMAP_TSV = str(MATRIX_DIR / "gene_expression.umap.tsv")
+MATRIX_UMAP_PLOT_GENE = str(MATRIX_DIR / "umap.gene.{plot_gene}.png")
+MATRIX_UMAP_PLOT_TOTAL = str(MATRIX_DIR / "umap.total.png")
+
 
 ###################
 # LIBRARY SATURATION FILES
@@ -116,8 +153,8 @@ wildcard_constraints:
 ##### target rules #####
 rule all:
     input:
-        # expand(STRANDED_FQ, run_id=RUN_IDS),
         expand(CONFIG_STATS, run_id=RUN_IDS),
         expand(MATRIX_UMAP_TSV, run_id=RUN_IDS),
         expand(SAT_PLOT, run_id=RUN_IDS),
-        # expand(ASSIGNED_BARCODE_COUNTS, run_id=RUN_IDS),
+        expand(MATRIX_UMAP_PLOT_TOTAL, run_id=RUN_IDS),
+        expand(MATRIX_UMAP_PLOT_GENE, run_id=RUN_IDS, plot_gene=PLOT_GENES),

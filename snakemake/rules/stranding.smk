@@ -33,7 +33,7 @@ rule call_adapter_scan:
         fastq=STRANDED_FQ_CHUNKED,
     threads: 1
     params:
-        batch_size=config["READ_STRUCTURE"]["BATCH_SIZE"],
+        batch_size=config["READ_STRUCTURE_BATCH_SIZE"],
     conda:
         "../envs/stranding.yml"
     shell:

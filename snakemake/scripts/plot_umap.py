@@ -4,8 +4,6 @@ import os
 import sys
 
 import matplotlib
-
-matplotlib.use("Agg")
 import matplotlib.cm as cm
 import matplotlib.pyplot as plt
 import numpy as np
@@ -36,29 +34,28 @@ def parse_args():
 
     # Optional arguments
     parser.add_argument(
-        "--output_prefix",
-        help="Output file prefix to use when saving annotated UMAP plots \
-            (<output_prefix>.FEATURE.png) [umap]",
+        "--output",
+        help="Output file name for UMAP plots [umap.png]",
         type=str,
-        default="umap",
+        default="umap.png",
     )
 
     parser.add_argument(
         "-g",
-        "--genes",
-        help="List of genes to annotate in UMAP plots, separated by commas \
-        (e.g. --genes=CD19,CD38,CD27) [None]",
+        "--gene",
+        help="Gene to annotate in UMAP plots (e.g. --gene=CD19). If not \
+        specified, cells will be annotated with total UMI counts [None]",
         type=str,
         default=None,
     )
 
-    parser.add_argument(
-        "-t",
-        "--target_cells",
-        help="List of cells to highlight in UMAP plots [None]",
-        type=str,
-        default=None,
-    )
+    # parser.add_argument(
+    #     "-t",
+    #     "--target_cells",
+    #     help="List of cells to highlight in UMAP plots [None]",
+    #     type=str,
+    #     default=None,
+    # )
 
     parser.add_argument(
         "-s", "--size", help="Size of markers [15]", type=int, default=15
@@ -77,6 +74,9 @@ def parse_args():
 
     # Parse arguments
     args = parser.parse_args()
+
+    if args.gene == "None":
+        args.gene = None
 
     return args
 
@@ -134,8 +134,7 @@ def scatterplot(df, values, args):
     ax.set_xlabel("UMAP-1")
     ax.set_ylabel("UMAP-2")
 
-    fn = f"{args.output_prefix}.{values.name}.png"
-    plt.savefig(fn)
+    plt.savefig(args.output)
 
 
 def get_expression(args):
@@ -147,19 +146,20 @@ def get_expression(args):
     )
     df_f = df_f.transpose()
 
-    if args.genes:
-        genes = args.genes.split(",")
-
-        # Make sure requested genes are in the matrix
-        for g in genes:
-            if g not in df_f.columns:
-                logger.info(f"WARNING: gene {g} not found in expression matrix!")
-
     # Create annotation dataframe with requested features
     df_annot = pd.DataFrame()
     df_annot["total"] = np.exp(df_f).sum(axis=1) - 1
-    for g in genes:
-        df_annot[g] = df_f.loc[:, g]
+
+    if args.gene:
+        # Make sure requested gene is in the matrix
+        if args.gene not in df_f.columns:
+            logging.info(f"WARNING: gene {args.gene} not found in expression matrix!")
+            fig = plt.figure(figsize=[8, 8])
+            fig.add_axes([0.08, 0.08, 0.85, 0.85])
+            plt.savefig(args.output)
+            sys.exit()
+
+        df_annot[args.gene] = df_f.loc[:, args.gene]
 
     return df_annot
 
@@ -171,26 +171,27 @@ def main(args):
 
     df_annot = get_expression(args)
 
-    for feature in df_annot.columns:
-        logger.info(f"Plotting UMAP with {feature} annotation")
+    if not args.gene:
+        logger.info("Plotting UMAP with total UMI counts")
+        scatterplot(df, df_annot.loc[:, "total"], args)
+    else:
+        logger.info(f"Plotting UMAP with {args.gene} annotations")
+        scatterplot(df, df_annot.loc[:, args.gene], args)
 
-        values = df_annot.loc[:, feature]
-        scatterplot(df, values, args)
-
-    if args.target_cells:
-        logger.info(f"Plotting UMAP with highlighted cells from {args.target_cells}")
-
-        df_highlight = pd.read_csv(args.target_cells, header=None, names=["barcode"])
-        df_highlight["barcode"] = df_highlight["barcode"].str.split(
-            "-", n=0, expand=True
-        )
-        df_highlight["highlight"] = "red"
-        df_highlight = df_highlight.set_index("barcode")
-        df_highlight = pd.merge(df, df_highlight, on="barcode", how="left").fillna(
-            "lightgray"
-        )
-        values = df_highlight.loc[:, "highlight"]
-        scatterplot(df, values, args)
+    # if args.target_cells:
+    #     logger.info(f"Plotting UMAP with highlighted cells from {args.target_cells}")
+    #
+    #     df_highlight = pd.read_csv(args.target_cells, header=None, names=["barcode"])
+    #     df_highlight["barcode"] = df_highlight["barcode"].str.split(
+    #         "-", n=0, expand=True
+    #     )
+    #     df_highlight["highlight"] = "red"
+    #     df_highlight = df_highlight.set_index("barcode")
+    #     df_highlight = pd.merge(df, df_highlight, on="barcode", how="left").fillna(
+    #         "lightgray"
+    #     )
+    #     values = df_highlight.loc[:, "highlight"]
+    #     scatterplot(df, values, args)
 
 
 if __name__ == "__main__":

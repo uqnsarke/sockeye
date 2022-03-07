@@ -19,7 +19,7 @@ rule get_chrom_sizes:
 
 
 def get_split_ont_align_mem_gb(wildcards, threads):
-    return config["RESOURCES"]["MINIMAP2_MEM_GB"] / threads
+    return config["RESOURCES_MM2_MEM_GB"] / threads
 
 
 rule align_to_ref:
@@ -34,7 +34,7 @@ rule align_to_ref:
         sort_bam_bai=BAM_SORT_BAI,
     params:
         ref=config["REF_GENOME_FASTA"],
-    threads: config["RESOURCES"]["MINIMAP2_MAX_THREADS"]
+    threads: config["RESOURCES_MM2_MAX_THREADS"]
     resources:
         mem_gb=get_split_ont_align_mem_gb,
     conda:

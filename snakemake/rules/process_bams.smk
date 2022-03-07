@@ -6,10 +6,10 @@ rule extract_barcodes:
         tsv=BARCODE_COUNTS,
     params:
         barcodes=config["BC_SUPERLIST"],
-        read1=config["READ_STRUCTURE"]["READ1"],
-        read1_suff_length=config["BARCODE"]["READ1_SUFF_LENGTH"],
-        barcode_length=config["READ_STRUCTURE"]["BARCODE_LENGTH"],
-        umi_length=config["READ_STRUCTURE"]["UMI_LENGTH"],
+        read1=config["READ_STRUCTURE_READ1"],
+        read1_suff_length=config["BARCODE_READ1_SUFF_LENGTH"],
+        barcode_length=config["READ_STRUCTURE_BARCODE_LENGTH"],
+        umi_length=config["READ_STRUCTURE_UMI_LENGTH"],
     threads: config["MAX_THREADS"]
     conda:
         "../envs/barcodes.yml"
@@ -48,7 +48,7 @@ rule generate_whitelist:
         whitelist=BARCODE_WHITELIST,
         kneeplot=BARCODE_KNEEPLOT,
     params:
-        flags=config["BARCODE"]["KNEEPLOT_FLAGS"],
+        flags=config["BARCODE_KNEEPLOT_FLAGS"],
     conda:
         "../envs/kneeplot.yml"
     shell:
@@ -84,12 +84,12 @@ rule assign_barcodes:
         bam=CHROM_BAM_BC_TMP,
         counts=CHROM_ASSIGNED_BARCODE_COUNTS,
     params:
-        max_ed=config["BARCODE"]["MAX_ED"],
-        min_ed_diff=config["BARCODE"]["MIN_ED_DIFF"],
-        read1=config["READ_STRUCTURE"]["READ1"],
-        read1_suff_length=config["BARCODE"]["READ1_SUFF_LENGTH"],
-        barcode_length=config["READ_STRUCTURE"]["BARCODE_LENGTH"],
-        umi_length=config["READ_STRUCTURE"]["UMI_LENGTH"],
+        max_ed=config["BARCODE_MAX_ED"],
+        min_ed_diff=config["BARCODE_MIN_ED_DIFF"],
+        read1=config["READ_STRUCTURE_READ1"],
+        read1_suff_length=config["BARCODE_READ1_SUFF_LENGTH"],
+        barcode_length=config["READ_STRUCTURE_BARCODE_LENGTH"],
+        umi_length=config["READ_STRUCTURE_UMI_LENGTH"],
     threads: 1
     conda:
         "../envs/barcodes.yml"
@@ -153,7 +153,7 @@ rule assign_genes:
     output:
         gene_assigned=CHROM_TSV_GENE_ASSIGNS,
     params:
-        minQV=config["GENE_ASSIGNS"]["MINQV"],
+        minQV=config["GENE_ASSIGNS_MINQV"],
     threads: 1
     conda:
         "../envs/assign_genes.yml"
@@ -200,7 +200,7 @@ rule cluster_umis:
     output:
         bam=CHROM_BAM_FULLY_TAGGED_TMP,
     params:
-        interval=config["UMI"]["GENOMIC_INTERVAL"],
+        interval=config["UMI_GENOMIC_INTERVAL"],
     conda:
         "../envs/umis.yml"
     threads: 1
@@ -274,10 +274,10 @@ rule process_expression_matrix:
     output:
         tsv=MATRIX_PROCESSED_TSV,
     params:
-        min_genes=config["MATRIX"]["MIN_GENES"],
-        min_cells=config["MATRIX"]["MIN_CELLS"],
-        max_mito=config["MATRIX"]["MAX_MITO"],
-        norm_count=config["MATRIX"]["NORM_COUNT"],
+        min_genes=config["MATRIX_MIN_GENES"],
+        min_cells=config["MATRIX_MIN_CELLS"],
+        max_mito=config["MATRIX_MAX_MITO"],
+        norm_count=config["MATRIX_NORM_COUNT"],
     conda:
         "../envs/barcodes.yml"
     shell:
@@ -299,6 +299,37 @@ rule umap_reduce_expression_matrix:
     shell:
         "python {SCRIPT_DIR}/umap_reduce.py "
         "--output {output.tsv} {input.tsv}"
+
+
+rule umap_plot_total_umis:
+    input:
+        umap=MATRIX_UMAP_TSV,
+        matrix=MATRIX_PROCESSED_TSV,
+    output:
+        plot=MATRIX_UMAP_PLOT_TOTAL,
+    conda:
+        "../envs/plotting.yml"
+    shell:
+        "python {SCRIPT_DIR}/plot_umap.py "
+        "--output {output.plot} "
+        "{input.umap} {input.matrix}"
+
+
+rule umap_plot_genes:
+    input:
+        umap=MATRIX_UMAP_TSV,
+        matrix=MATRIX_PROCESSED_TSV,
+    output:
+        plot=MATRIX_UMAP_PLOT_GENE,
+    params:
+        gene=lambda wc: wc.plot_gene,
+    conda:
+        "../envs/plotting.yml"
+    shell:
+        "python {SCRIPT_DIR}/plot_umap.py "
+        "--gene {params.gene} "
+        "--output {output.plot} "
+        "{input.umap} {input.matrix}"
 
 
 rule umi_gene_saturation:
