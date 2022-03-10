@@ -53,6 +53,7 @@ def parse_args():
         type=int,
         default=200000,
     )
+
     parser.add_argument(
         "--verbosity",
         help="logging level: <=2 logs info, <=3 logs warnings",

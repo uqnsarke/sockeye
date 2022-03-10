@@ -9,3 +9,4 @@ dependencies:
   - tqdm
   - editdistance
   - pandas
+  - dask==2021.10.0

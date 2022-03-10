@@ -9,10 +9,13 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import time
 
+import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 import pysam
+from dask.distributed import Client
 from editdistance import eval as edit_distance
 from tqdm import tqdm
 
@@ -78,21 +81,6 @@ def init_logger(args):
     logging_level = args.verbosity * 10
     logging.root.setLevel(logging_level)
     logging.root.handlers[0].addFilter(lambda x: "NumExpr" not in x.msg)
-
-
-def run_subprocess(cmd):
-    """
-    Run OS command and return stdout & stderr
-    """
-    p = subprocess.Popen(
-        cmd,
-        shell=True,
-        stderr=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        universal_newlines=True,
-    )
-    stdout, stderr = p.communicate()
-    return str(stdout), str(stderr)
 
 
 def breadth_first_search(node, adj_list):
@@ -196,21 +184,20 @@ def correct_umis(umis):
     # logging.info(f"clustering {len(umis)} UMIs")
     counts_dict = dict(umis.value_counts())
     umi_map = create_map_to_correct_umi(cluster(counts_dict))
+    # for k,v in umi_map.items():
+    #     if k!=v:
+    #         print(f"{k} --> {v}")
+    #     else:
+    #         print("no correction")
     return umis.replace(umi_map)
 
 
 def add_tags(chrom, umis, genes, args):
-    """ """
-    # Write temp file or straight to output file depending on use case
-    if args.threads > 1:
-        # Open temporary output BAM file for writing
-        suff = f".{chrom}.bam"
-        chrom_bam = tempfile.NamedTemporaryFile(
-            prefix="tmp.align.", suffix=suff, dir=args.tempdir, delete=False
-        )
-        bam_out_fn = chrom_bam.name
-    else:
-        bam_out_fn = args.output
+    """
+    Using the read_id:umi_corr and read_id:gene dictionaries, add UB:Z and GN:Z
+    tags to the output BAM file.
+    """
+    bam_out_fn = args.output
 
     bam = pysam.AlignmentFile(args.bam, "rb")
     bam_out = pysam.AlignmentFile(bam_out_fn, "wb", template=bam)
@@ -228,8 +215,6 @@ def add_tags(chrom, umis, genes, args):
 
     bam.close()
     bam_out.close()
-
-    return bam_out_fn
 
 
 def get_bam_info(bam):
@@ -281,79 +266,20 @@ def create_region_name(align, args):
     return gene
 
 
-def read_bam(bam):
+def get_num_partitions(args):
     """
-    Read gene, cell barcode and UMI values from BAM entries
+    Determine how many partitions to create for the Dask dataframe. From Dask's
+    best practices page:
+
+    "it’s common for Dask to have 2-3 times as many chunks a if you have 1 GB
+    chunks and ten cores, then Dask is likely to use at least 10 GB of memory.
+    Additionally, it’s common for Dask to have 2-3 times as many chunks
+    available to work on so that it always has something to work on."
+
+    So we will set npartitions to be several times the number of threads
+    specified in the command line args
     """
-    n_aligns, chroms = get_bam_info(bam)
-
-    bam = pysam.AlignmentFile(bam, "rb")
-
-    records = []
-    for align in tqdm(bam.fetch(), total=n_aligns):
-        read_id = align.query_name
-
-        # Corrected cell barcode = CB:Z
-        bc_corr = align.get_tag("CB")
-
-        # Uncorrected UMI = UR:Z
-        umi_uncorr = align.get_tag("UR")
-
-        # Annotated gene name = GN:Z
-        gene = align.get_tag("GN")
-
-        if gene == "NA":
-            # Group by region if no gene annotation
-            gene = create_region_name(align, args)
-
-        records.append((read_id, gene, bc_corr, umi_uncorr))
-
-    df = pd.DataFrame.from_records(
-        records, columns=["read_id", "gene", "bc", "umi_uncorr"]
-    )
-    bam.close()
-
-    return df
-
-
-def launch_pool(func, func_args, procs=1):
-    """
-    Use multiprocessing library to create pool and map function calls to
-    that pool
-
-    :param procs: Number of processes to use for pool
-    :type procs: int, optional
-    :param func: Function to exececute in the pool
-    :type func: function
-    :param func_args: List containing arguments for each call to function <funct>
-    :type func_args: list
-    :return: List of results returned by each call to function <funct>
-    :rtype: list
-    """
-    p = multiprocessing.Pool(processes=procs)
-    try:
-        results = list(tqdm(p.imap(func, func_args), total=len(func_args)))
-        p.close()
-        p.join()
-    except KeyboardInterrupt:
-        p.terminate()
-    return results
-
-
-def launch_df_pool(df_grouped, func, threads, chunks):
-    """ """
-    p = multiprocessing.Pool(processes=threads)
-    try:
-        res = list(tqdm(p.imap(func, [df_ for idx, df_ in df_grouped]), total=chunks))
-        p.close()
-        p.join()
-    except KeyboardInterrupt:
-        p.terminate()
-    return pd.concat(res)
-
-
-def func_group_apply(df):
-    return df.groupby(["gene", "bc"])["umi_uncorr"].apply(correct_umis)
+    return 3 * args.threads
 
 
 def process_bam_records(tup):
@@ -407,10 +333,47 @@ def process_bam_records(tup):
         records, columns=["read_id", "gene", "bc", "umi_uncorr"]
     )
 
-    df["umi_corr"] = df.groupby(["gene", "bc"])["umi_uncorr"].apply(correct_umis)
+    # This was the original vanilla pandas implementation
+    # start = time.time()
+    # print(df.shape)
+    # print(df.head(10))
+    # df["umi_corr"] = df.groupby(["gene", "bc"])["umi_uncorr"].apply(correct_umis)
+    # end = time.time()
+    # print(df.head(10))
+    # print("PANDAS", end-start)
+    # df = df.drop("umi_corr", axis=1)
+
+    ############################################################################
+    # Dask implementation. Split df into partitions for parallel groupby-apply #
+    ############################################################################
+    # client = Client(n_workers=args.threads, threads_per_worker=1)
+    Client(n_workers=args.threads, threads_per_worker=1)
+
+    # Index on gene to get clean partition boundaries (no genes split across
+    # partitions)
+    df = df.sort_values("gene").set_index("gene")
+    npartitions = get_num_partitions(args)
+    ddf = dd.from_pandas(df, npartitions=npartitions, sort=True)
+
+    # Need to reindex because indexing by gene is redundant (many repeats),
+    # which otherwise causes the corrected umi results to be out of order
+    ddf = ddf.reset_index(drop=False).reset_index(drop=False)
+    ddf["new_index"] = ddf["gene"] + "_" + ddf["index"].astype("str")
+    ddf = ddf.set_index("new_index")
+    # start = time.time()
+    ddf["umi_corr"] = (
+        ddf.groupby(["gene", "bc"])["umi_uncorr"]
+        .apply(correct_umis, meta=("umi_corr", "str"))
+        .compute()
+    )
+
+    # Return to the pandas dataframe
+    df = ddf.compute()
+    # end = time.time()
+    # print(end-start)
 
     # Simplify to a read_id:umi_corr dictionary
-    df = df.drop(["bc", "umi_uncorr"], axis=1).set_index("read_id")
+    df = df.drop(["index", "bc", "umi_uncorr"], axis=1).set_index("read_id")
 
     # Dict of corrected UMI for each read ID
     umis = df.to_dict()["umi_corr"]
@@ -419,50 +382,21 @@ def process_bam_records(tup):
     genes = df.to_dict()["gene"]
 
     # Add corrected UMIs to each chrom-specific BAM entry via the UB:Z tag
-    chrom_bam = add_tags(chrom, umis, genes, args)
-
-    return chrom_bam
+    add_tags(chrom, umis, genes, args)
 
 
 def main(args):
     init_logger(args)
     n_aligns, chroms = get_bam_info(args.bam)
 
-    if args.threads > 1:
-        # Create temporary directory
-        if os.path.exists(args.tempdir):
-            shutil.rmtree(args.tempdir)
-        os.mkdir(args.tempdir)
+    # Hopefully the chromosome name is prefix of BAM filename
+    REGEX = r"([A-Za-z0-9.]+).bc_assign.gene.bam"
+    m = re.search(REGEX, args.bam)
+    assert m.group() is not None, "Unexpected input file naming convention!"
 
-        logger.info(f"Processing input BAM using {args.threads} threads")
-        func_args = []
-        chroms_sorted = dict(sorted(chroms.items(), key=lambda item: item[1]))
-        for chrom in chroms_sorted.keys():
-            func_args.append((args.bam, chrom, args))
-
-        chrom_bam_fns = launch_pool(process_bam_records, func_args, args.threads)
-
-        logger.info(
-            f"Writing BAM with CR, CB, CY, UR, UB, and UY tags to {args.output}"
-        )
-        tmp_bam = tempfile.NamedTemporaryFile(
-            prefix="tmp.align.", suffix=".unsorted.bam", dir=args.tempdir, delete=False
-        )
-        merge_parameters = ["-f", tmp_bam.name] + list(chrom_bam_fns)
-        pysam.merge(*merge_parameters)
-
-        pysam.sort("-@", str(args.threads), "-o", args.output, tmp_bam.name)
-
-        logger.info("Cleaning up temporary files")
-        shutil.rmtree(args.tempdir)
-
-    else:
-        # Hopefully the chromosome name is prefix of BAM filename
-        REGEX = r"([A-Za-z0-9.]+).bc_assign.gene.bam"
-        m = re.search(REGEX, args.bam)
-        chrom = m.group(1)
-        func_args = (args.bam, chrom, args)
-        process_bam_records(func_args)
+    chrom = m.group(1)
+    func_args = (args.bam, chrom, args)
+    process_bam_records(func_args)
 
 
 if __name__ == "__main__":
