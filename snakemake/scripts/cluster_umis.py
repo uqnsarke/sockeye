@@ -282,6 +282,14 @@ def get_num_partitions(args):
     return 3 * args.threads
 
 
+def chunks(lst, n):
+    """
+    Yield successive n-sized chunks from lst.
+    """
+    for i in range(0, len(lst), n):
+        yield lst[i : i + n]
+
+
 def process_bam_records(tup):
     """
     Read through all the alignments for specific chromosome to pull out
@@ -343,37 +351,59 @@ def process_bam_records(tup):
     # print("PANDAS", end-start)
     # df = df.drop("umi_corr", axis=1)
 
+    # This is the chunked pandas implementation using multiprocessing module
+    # start = time.time()
+    # df["gene_cell"] = df["gene"] + ":" + df["bc"]
+    # df = df.drop(["gene", "bc"], axis=1)
+    # df = df.set_index("gene_cell")
+    # genes_cell_unique = list(set(df.index))
+    # genes_per_chunk = 500
+    # gene_cell_chunks = chunks(genes_cell_unique, genes_per_chunk)
+    # for gene_cell_chunk in gene_cell_chunks:
+    #     print(df.loc[gene_cell_chunk].shape)
+    #
+    #
+    # end = time.time()
+    # sys.exit()
+
     ############################################################################
     # Dask implementation. Split df into partitions for parallel groupby-apply #
     ############################################################################
-    # client = Client(n_workers=args.threads, threads_per_worker=1)
     Client(n_workers=args.threads, threads_per_worker=1)
 
     # Index on gene to get clean partition boundaries (no genes split across
     # partitions)
-    df = df.sort_values("gene").set_index("gene")
+    df["gene_cell"] = df["gene"] + ":" + df["bc"]
+    # df = df.sort_values("gene").set_index("gene")
+    df = df.set_index("gene_cell")
+
     npartitions = get_num_partitions(args)
     ddf = dd.from_pandas(df, npartitions=npartitions, sort=True)
 
     # Need to reindex because indexing by gene is redundant (many repeats),
     # which otherwise causes the corrected umi results to be out of order
     ddf = ddf.reset_index(drop=False).reset_index(drop=False)
-    ddf["new_index"] = ddf["gene"] + "_" + ddf["index"].astype("str")
+    ddf["new_index"] = ddf["gene_cell"] + "_" + ddf["index"].astype("str")
+    # ddf["new_index"] = ddf["gene_cell"] + "_" + ddf["index"].astype("str")
     ddf = ddf.set_index("new_index")
-    # start = time.time()
+    print(ddf.map_partitions(len).compute())
+    start = time.time()
     ddf["umi_corr"] = (
-        ddf.groupby(["gene", "bc"])["umi_uncorr"]
+        # ddf.groupby(["gene", "bc"])["umi_uncorr"]
+        ddf.groupby(["gene_cell"])["umi_uncorr"]
         .apply(correct_umis, meta=("umi_corr", "str"))
         .compute()
     )
 
     # Return to the pandas dataframe
     df = ddf.compute()
-    # end = time.time()
-    # print(end-start)
+    end = time.time()
+    print(end - start)
 
     # Simplify to a read_id:umi_corr dictionary
-    df = df.drop(["index", "bc", "umi_uncorr"], axis=1).set_index("read_id")
+    df = df.drop(["index", "bc", "umi_uncorr", "gene_cell"], axis=1).set_index(
+        "read_id"
+    )
 
     # Dict of corrected UMI for each read ID
     umis = df.to_dict()["umi_corr"]
