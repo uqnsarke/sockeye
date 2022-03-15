@@ -307,6 +307,7 @@ def launch_pool(func, func_args, procs=1):
     p = multiprocessing.Pool(processes=procs)
     try:
         results = list(tqdm(p.imap(func, func_args), total=len(func_args)))
+        # results = list(p.imap(func, func_args))
         p.close()
         p.join()
     except KeyboardInterrupt:
@@ -314,9 +315,9 @@ def launch_pool(func, func_args, procs=1):
     return results
 
 
-def run_groupby(df_):
-    df_["umi_corr"] = df_.groupby(["gene_cell"])["umi_uncorr"].apply(correct_umis)
-    return df_
+def run_groupby(df):
+    df["umi_corr"] = df.groupby(["gene_cell"])["umi_uncorr"].transform(correct_umis)
+    return df
 
 
 def process_bam_records(input_bam, chrom, args):
@@ -385,12 +386,12 @@ def process_bam_records(input_bam, chrom, args):
     gene_cell_chunks = chunks(genes_cell_unique, genes_per_chunk)
 
     func_args = []
-    for gene_cell_chunk in gene_cell_chunks:
+    for i, gene_cell_chunk in enumerate(gene_cell_chunks):
+        # df_ = df.loc[gene_cell_chunk].copy(deep=True)
         df_ = df.loc[gene_cell_chunk]
         func_args.append(df_)
 
     results = launch_pool(run_groupby, func_args, args.threads)
-
     df = pd.concat(results, axis=0)
     end = time.time()
     print(end - start)
