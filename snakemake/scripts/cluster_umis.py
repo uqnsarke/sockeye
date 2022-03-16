@@ -1,4 +1,5 @@
 import argparse
+import collections
 import itertools
 import logging
 import multiprocessing
@@ -50,6 +51,16 @@ def parse_args():
         assigned by featureCounts [1000]",
         type=int,
         default=1000,
+    )
+
+    parser.add_argument(
+        "--cell_gene_max_reads",
+        help="Maximum number of reads to consider for a particular gene + cell \
+        barcode combination. This is required to prevent too many PCR \
+        duplicates from crashing the UMI clustering algorithm. Can be increased \
+        if sufficient UMI complexity is observed. [20000]",
+        type=int,
+        default=20000,
     )
 
     parser.add_argument(
@@ -316,7 +327,15 @@ def launch_pool(func, func_args, procs=1):
 
 
 def run_groupby(df):
-    df["umi_corr"] = df.groupby(["gene_cell"])["umi_uncorr"].transform(correct_umis)
+    # df["umi_corr"] = df.groupby(["gene_cell"])["umi_uncorr"].transform(correct_umis)
+    for idx, df_ in df.groupby(["gene_cell"]):
+        num_reads = df_.shape[0]
+        print(num_reads)
+        start = time.time()
+        df_["umi_uncorr"].transform(correct_umis)
+        end = time.time()
+        print(end - start)
+        print()
     return df
 
 
@@ -336,6 +355,7 @@ def process_bam_records(input_bam, chrom, args):
     bam = pysam.AlignmentFile(input_bam, "rb")
 
     records = []
+    cell_gene_counter = collections.Counter()
     for align in bam.fetch(contig=chrom):
         read_id = align.query_name
 
@@ -357,7 +377,9 @@ def process_bam_records(input_bam, chrom, args):
             # Group by region if no gene annotation
             gene = create_region_name(align, args)
 
-        records.append((read_id, gene, bc_corr, umi_uncorr))
+        cell_gene_counter[(bc_corr, gene)] += 1
+        if cell_gene_counter[(bc_corr, gene)] <= args.cell_gene_max_reads:
+            records.append((read_id, gene, bc_corr, umi_uncorr))
 
     # Done reading the chrom-specific alignments from the BAM
     bam.close()
@@ -393,6 +415,7 @@ def process_bam_records(input_bam, chrom, args):
 
     results = launch_pool(run_groupby, func_args, args.threads)
     df = pd.concat(results, axis=0)
+    print(df.head())
     end = time.time()
     print(end - start)
 
