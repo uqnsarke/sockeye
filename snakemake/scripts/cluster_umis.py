@@ -216,13 +216,14 @@ def add_tags(chrom, umis, genes, args):
     for align in bam.fetch(chrom):
         read_id = align.query_name
 
-        # Corrected UMI = UB:Z
-        align.set_tag("UB", umis[read_id], value_type="Z")
+        if (umis.get(read_id) is not None) & (genes.get(read_id) is not None):
+            # Corrected UMI = UB:Z
+            align.set_tag("UB", umis[read_id], value_type="Z")
 
-        # Annotated gene name = GN:Z
-        align.set_tag("GN", genes[read_id], value_type="Z")
+            # Annotated gene name = GN:Z
+            align.set_tag("GN", genes[read_id], value_type="Z")
 
-        bam_out.write(align)
+            bam_out.write(align)
 
     bam.close()
     bam_out.close()
@@ -327,15 +328,7 @@ def launch_pool(func, func_args, procs=1):
 
 
 def run_groupby(df):
-    # df["umi_corr"] = df.groupby(["gene_cell"])["umi_uncorr"].transform(correct_umis)
-    for idx, df_ in df.groupby(["gene_cell"]):
-        num_reads = df_.shape[0]
-        print(num_reads)
-        start = time.time()
-        df_["umi_uncorr"].transform(correct_umis)
-        end = time.time()
-        print(end - start)
-        print()
+    df["umi_corr"] = df.groupby(["gene_cell"])["umi_uncorr"].transform(correct_umis)
     return df
 
 
@@ -400,7 +393,6 @@ def process_bam_records(input_bam, chrom, args):
     # df = df.drop("umi_corr", axis=1)
 
     # This is the chunked pandas implementation using multiprocessing module
-    start = time.time()
     df["gene_cell"] = df["gene"] + ":" + df["bc"]
     df = df.set_index("gene_cell")
     genes_cell_unique = list(set(df.index))
@@ -415,9 +407,6 @@ def process_bam_records(input_bam, chrom, args):
 
     results = launch_pool(run_groupby, func_args, args.threads)
     df = pd.concat(results, axis=0)
-    print(df.head())
-    end = time.time()
-    print(end - start)
 
     ############################################################################
     # Dask implementation. Split df into partitions for parallel groupby-apply #
