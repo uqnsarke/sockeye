@@ -406,7 +406,10 @@ def process_bam_records(input_bam, chrom, args):
         func_args.append(df_)
 
     results = launch_pool(run_groupby, func_args, args.threads)
-    df = pd.concat(results, axis=0)
+    if len(results) > 0:
+        df = pd.concat(results, axis=0)
+    else:
+        df = pd.DataFrame(columns = ["read_id", "gene", "bc", "umi_uncorr", "umi_corr"])
 
     ############################################################################
     # Dask implementation. Split df into partitions for parallel groupby-apply #
