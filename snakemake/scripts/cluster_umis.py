@@ -12,11 +12,9 @@ import sys
 import tempfile
 import time
 
-import dask.dataframe as dd
 import numpy as np
 import pandas as pd
 import pysam
-from dask.distributed import Client
 from editdistance import eval as edit_distance
 from tqdm import tqdm
 
@@ -192,14 +190,8 @@ def create_map_to_correct_umi(cluster_list):
 
 
 def correct_umis(umis):
-    # logging.info(f"clustering {len(umis)} UMIs")
     counts_dict = dict(umis.value_counts())
     umi_map = create_map_to_correct_umi(cluster(counts_dict))
-    # for k,v in umi_map.items():
-    #     if k!=v:
-    #         print(f"{k} --> {v}")
-    #     else:
-    #         print("no correction")
     return umis.replace(umi_map)
 
 
@@ -276,22 +268,6 @@ def create_region_name(align, args):
     # New 'gene name' will be <chr>_<interval_start>_<interval_end>
     gene = f"{chrom}_{int(interval_start)}_{int(interval_end)}"
     return gene
-
-
-def get_num_partitions(args):
-    """
-    Determine how many partitions to create for the Dask dataframe. From Dask's
-    best practices page:
-
-    "it’s common for Dask to have 2-3 times as many chunks a if you have 1 GB
-    chunks and ten cores, then Dask is likely to use at least 10 GB of memory.
-    Additionally, it’s common for Dask to have 2-3 times as many chunks
-    available to work on so that it always has something to work on."
-
-    So we will set npartitions to be several times the number of threads
-    specified in the command line args
-    """
-    return 3 * args.threads
 
 
 def chunks(lst, n):
@@ -382,16 +358,6 @@ def process_bam_records(input_bam, chrom, args):
         records, columns=["read_id", "gene", "bc", "umi_uncorr"]
     )
 
-    # This was the original vanilla pandas implementation
-    # start = time.time()
-    # print(df.shape)
-    # print(df.head(10))
-    # df["umi_corr"] = df.groupby(["gene", "bc"])["umi_uncorr"].apply(correct_umis)
-    # end = time.time()
-    # print(df.head(10))
-    # print("PANDAS", end-start)
-    # df = df.drop("umi_corr", axis=1)
-
     # This is the chunked pandas implementation using multiprocessing module
     df["gene_cell"] = df["gene"] + ":" + df["bc"]
     df = df.set_index("gene_cell")
@@ -401,7 +367,6 @@ def process_bam_records(input_bam, chrom, args):
 
     func_args = []
     for i, gene_cell_chunk in enumerate(gene_cell_chunks):
-        # df_ = df.loc[gene_cell_chunk].copy(deep=True)
         df_ = df.loc[gene_cell_chunk]
         func_args.append(df_)
 
@@ -409,41 +374,7 @@ def process_bam_records(input_bam, chrom, args):
     if len(results) > 0:
         df = pd.concat(results, axis=0)
     else:
-        df = pd.DataFrame(columns = ["read_id", "gene", "bc", "umi_uncorr", "umi_corr"])
-
-    ############################################################################
-    # Dask implementation. Split df into partitions for parallel groupby-apply #
-    ############################################################################
-    # Client(n_workers=args.threads, threads_per_worker=1)
-    #
-    # # Index on gene to get clean partition boundaries (no genes split across
-    # # partitions)
-    # df["gene_cell"] = df["gene"] + ":" + df["bc"]
-    # # df = df.sort_values("gene").set_index("gene")
-    # df = df.set_index("gene_cell")
-    #
-    # npartitions = get_num_partitions(args)
-    # ddf = dd.from_pandas(df, npartitions=npartitions, sort=True)
-    #
-    # # Need to reindex because indexing by gene is redundant (many repeats),
-    # # which otherwise causes the corrected umi results to be out of order
-    # ddf = ddf.reset_index(drop=False).reset_index(drop=False)
-    # ddf["new_index"] = ddf["gene_cell"] + "_" + ddf["index"].astype("str")
-    # # ddf["new_index"] = ddf["gene_cell"] + "_" + ddf["index"].astype("str")
-    # ddf = ddf.set_index("new_index")
-    # print(ddf.map_partitions(len).compute())
-    # start = time.time()
-    # ddf["umi_corr"] = (
-    #     # ddf.groupby(["gene", "bc"])["umi_uncorr"]
-    #     ddf.groupby(["gene_cell"])["umi_uncorr"]
-    #     .apply(correct_umis, meta=("umi_corr", "str"))
-    #     .compute()
-    # )
-    #
-    # # Return to the pandas dataframe
-    # df = ddf.compute()
-    # end = time.time()
-    # print(end - start)
+        df = pd.DataFrame(columns=["read_id", "gene", "bc", "umi_uncorr", "umi_corr"])
 
     # Simplify to a read_id:umi_corr dictionary
     df = df.drop(["bc", "umi_uncorr"], axis=1).set_index("read_id")
@@ -462,7 +393,7 @@ def main(args):
     init_logger(args)
     n_aligns, chroms = get_bam_info(args.bam)
 
-    # Hopefully the chromosome name is prefix of BAM filename
+    # The chromosome name should be the prefix of BAM filename
     REGEX = r"([A-Za-z0-9.]+).bc_assign.gene.bam"
     m = re.search(REGEX, args.bam)
     assert m.group() is not None, "Unexpected input file naming convention!"

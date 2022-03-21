@@ -2,7 +2,7 @@ rule extract_barcodes:
     input:
         bam=BAM_SORT,
     output:
-        bam=BAM_BC_UNCORR_TMP,
+        bam=temp(BAM_BC_UNCORR_TMP),
         tsv=BARCODE_COUNTS,
     params:
         barcodes=config["BC_SUPERLIST"],
@@ -29,10 +29,8 @@ rule cleanup_headers_1:
     input:
         BAM_BC_UNCORR_TMP,
     output:
-        # bam=temp(BAM_BC_UNCORR),
-        # bai=temp(BAM_BC_UNCORR_BAI),
-        bam=BAM_BC_UNCORR,
-        bai=BAM_BC_UNCORR_BAI,
+        bam=temp(BAM_BC_UNCORR),
+        bai=temp(BAM_BC_UNCORR_BAI),
     conda:
         "../envs/samtools.yml"
     shell:
@@ -81,7 +79,7 @@ rule assign_barcodes:
         bai=CHROM_BAM_BC_UNCORR_BAI,
         whitelist=BARCODE_WHITELIST,
     output:
-        bam=CHROM_BAM_BC_TMP,
+        bam=temp(CHROM_BAM_BC_TMP),
         counts=CHROM_ASSIGNED_BARCODE_COUNTS,
     params:
         max_ed=config["BARCODE_MAX_ED"],
@@ -112,8 +110,8 @@ rule cleanup_headers_2:
     input:
         CHROM_BAM_BC_TMP,
     output:
-        bam=CHROM_BAM_BC,
-        bai=CHROM_BAM_BC_BAI,
+        bam=temp(CHROM_BAM_BC),
+        bai=temp(CHROM_BAM_BC_BAI),
     conda:
         "../envs/samtools.yml"
     shell:
@@ -169,7 +167,7 @@ rule add_gene_tags_to_bam:
         bai=CHROM_BAM_BC_BAI,
         genes=CHROM_TSV_GENE_ASSIGNS,
     output:
-        bam=CHROM_BAM_BC_GENE_TMP,
+        bam=temp(CHROM_BAM_BC_GENE_TMP),
     conda:
         "../envs/umis.yml"
     shell:
@@ -183,8 +181,8 @@ rule cleanup_headers_3:
     input:
         CHROM_BAM_BC_GENE_TMP,
     output:
-        bam=CHROM_BAM_BC_GENE,
-        bai=CHROM_BAM_BC_GENE_BAI,
+        bam=temp(CHROM_BAM_BC_GENE),
+        bai=temp(CHROM_BAM_BC_GENE_BAI),
     conda:
         "../envs/samtools.yml"
     shell:
@@ -198,17 +196,19 @@ rule cluster_umis:
         bam=CHROM_BAM_BC_GENE,
         bai=CHROM_BAM_BC_GENE_BAI,
     output:
-        bam=CHROM_BAM_FULLY_TAGGED_TMP,
+        bam=temp(CHROM_BAM_FULLY_TAGGED_TMP),
     params:
         interval=config["UMI_GENOMIC_INTERVAL"],
+        cell_gene_max_reads=config["UMI_CELL_GENE_MAX_READS"],
     conda:
         "../envs/umis.yml"
-    threads: 1
+    threads: config["MAX_THREADS"]
     shell:
         "touch {input.bai}; "
         "python {SCRIPT_DIR}/cluster_umis.py "
         "--threads {threads} "
         "--ref_interval {params.interval} "
+        "--cell_gene_max_reads {params.cell_gene_max_reads} "
         "--output {output.bam} {input.bam}"
 
 
@@ -252,7 +252,7 @@ rule combine_chrom_bams:
     shell:
         "samtools merge -o {output.all} {input}; "
         "samtools index {output.all}; "
-        # "rm -rf {params.split_dir}"
+        "rm -rf {params.split_dir}"
 
 
 rule construct_expression_matrix:

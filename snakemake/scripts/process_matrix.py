@@ -155,6 +155,7 @@ def main(args):
     df = normalize(df, args)
     df = logarithmize(df)
 
+    logger.info(f"Processed matrix: {df.shape[0]} genes x {df.shape[1]} cells")
     df.to_csv(args.output, sep="\t")
 
 

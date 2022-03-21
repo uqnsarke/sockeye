@@ -593,7 +593,7 @@ def get_bam_info(bam):
 
 def main(args):
     init_logger(args)
-    logger.info("Getting BAM statistics")
+    # logger.info("Getting BAM statistics")
     n_reads, chroms = get_bam_info(args.bam)
 
     if args.threads > 1:
