@@ -361,9 +361,9 @@ def process_bam_records(input_bam, chrom, args):
     # This is the chunked pandas implementation using multiprocessing module
     df["gene_cell"] = df["gene"] + ":" + df["bc"]
     df = df.set_index("gene_cell")
-    genes_cell_unique = list(set(df.index))
-    genes_per_chunk = 50
-    gene_cell_chunks = chunks(genes_cell_unique, genes_per_chunk)
+    gene_cell_unique = list(set(df.index))
+    gene_cell_per_chunk = 50
+    gene_cell_chunks = chunks(gene_cell_unique, gene_cell_per_chunk)
 
     func_args = []
     for i, gene_cell_chunk in enumerate(gene_cell_chunks):
