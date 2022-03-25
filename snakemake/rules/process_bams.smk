@@ -202,7 +202,7 @@ rule cluster_umis:
         cell_gene_max_reads=config["UMI_CELL_GENE_MAX_READS"],
     conda:
         "../envs/umis.yml"
-    threads: config["MAX_THREADS"]
+    threads: config["UMI_CLUSTER_MAX_THREADS"]
     shell:
         "touch {input.bai}; "
         "python {SCRIPT_DIR}/cluster_umis.py "
