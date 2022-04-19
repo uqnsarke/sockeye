@@ -255,6 +255,19 @@ rule combine_chrom_bams:
         "rm -rf {params.split_dir}"
 
 
+rule count_cell_gene_umi_reads:
+    input:
+        bam=BAM_FULLY_TAGGED,
+    output:
+        table=CELL_UMI_GENE_TSV,
+    conda:
+        "../envs/barcodes.yml"
+    shell:
+        "python {SCRIPT_DIR}/cell_umi_gene_table.py "
+        "--output {output} "
+        "{input.bam} "
+
+
 rule construct_expression_matrix:
     input:
         bam=BAM_FULLY_TAGGED,
