@@ -1,0 +1,62 @@
+RUNS: "config/runs.csv"
+
+OUTPUT_BASE: /home/OXFORDNANOLABS/jbeaulaurier/projects/packages/sockeye/snakemake/output
+
+################################################################################
+## 10x SUPPORTING FILES                                                         #
+#################################################################################
+## Reference files can be downloaded from the 10x website using either curl or wget:
+## For the human GRCh38 reference, the commands would be:
+## curl -O https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2020-A.tar.gz
+## or
+## wget https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2020-A.tar.gz
+#
+########## REF_GENOME_FASTA #########
+## REF_GENOME_FASTA refers the the genome fasta file located at:
+## <REFERENCE>/fasta/genome.fa
+REF_GENOME_FASTA: /mmfs1/data/active/shared/refgenome/10x_refs/refdata-gex-GRCh38-2020-A/fasta/genome.fa
+
+######### REF_GTF #########
+## REF_GTF refers the the gene annotation GTF file located at:
+## <REFERENCE>/genes/genes.gtf
+REF_GTF:          /mmfs1/data/active/shared/refgenome/10x_refs/refdata-gex-GRCh38-2020-A/genes/genes.gtf
+
+######### BC_SUPERLIST #########
+## The 10x cell barcode full whitelist (BC_SUPERLIST) can be downloaded using:
+## wget https://github.com/10XGenomics/cellranger/raw/master/lib/python/cellranger/barcodes/3M-february-2018.txt.gz
+## BC_SUPERLIST path can point to either the .txt.gz or .txt file
+BC_SUPERLIST:  /mmfs1/data/active/shared/refgenome/10x_refs/3M-february-2018.txt
+################################################################################
+
+MAX_THREADS: 24
+
+READ_STRUCTURE_BATCH_SIZE: 40000
+READ_STRUCTURE_BARCODE_LENGTH: 16
+READ_STRUCTURE_UMI_LENGTH: 12
+READ_STRUCTURE_READ1: CTACACGACGCTCTTCCGATCT
+READ_STRUCTURE_READ1_TSO: ATGTACTCTGCGTTGATACCACTGCTT
+READ_STRUCTURE_FLAGS: ""
+
+BARCODE_READ1_SUFF_LENGTH: 10
+BARCODE_KNEEPLOT_FLAGS: ""
+BARCODE_MAX_ED: 2
+BARCODE_MIN_ED_DIFF: 2
+
+GENE_ASSIGNS_MINQV: 60
+
+UMI_GENOMIC_INTERVAL: 1000
+UMI_CELL_GENE_MAX_READS: 20000
+UMI_CLUSTER_MAX_THREADS: 8
+
+MATRIX_MIN_GENES: 25
+MATRIX_MIN_CELLS: 1
+MATRIX_MAX_MITO: 20
+MATRIX_NORM_COUNT: 10000
+
+# Using a comma-separated list, specify which genes should be annotated in the
+# # UMAP plots (e.g. CD19,PAX5,XBP1)
+UMAP_PLOT_GENES: CD19,CD24,CD27,CD38,CD79A,CD79B,PAX5,XBP1
+
+# Set the maximum resources to devote to the minimap2 alignment step
+RESOURCES_MM2_MEM_GB: 50
+RESOURCES_MM2_MAX_THREADS: 12
