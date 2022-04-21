@@ -49,6 +49,14 @@ def parse_args():
         default=None,
     )
 
+    parser.add_argument(
+        "--mito_genes",
+        help="Annotate the expression level of all mitochondrial genes. This \
+        is useful for identifying unreliable cells with high mitochondrial \
+        gene expression. Overrides the --gene flag [False]",
+        action="store_true",
+    )
+
     # parser.add_argument(
     #     "-t",
     #     "--target_cells",
@@ -78,6 +86,10 @@ def parse_args():
     if args.gene == "None":
         args.gene = None
 
+    # Override --gene flag if --mito_genes is specified
+    if args.mito_genes:
+        args.gene = None
+
     return args
 
 
@@ -103,7 +115,7 @@ def scatterplot(df, values, args):
     fig = plt.figure(figsize=[8, 8])
     ax = fig.add_axes([0.08, 0.08, 0.85, 0.85])
 
-    if values.name == "total":
+    if (values.name == "total") | (values.name == "mitochondrial"):
         cmap = cm.jet
     else:
         cmap = cm.cool
@@ -158,8 +170,17 @@ def get_expression(args):
             fig.add_axes([0.08, 0.08, 0.85, 0.85])
             plt.savefig(args.output)
             sys.exit()
-
         df_annot[args.gene] = df_f.loc[:, args.gene]
+    elif args.mito_genes:
+        # Make sure at least one mitochondrial gene is in the matrix
+        mito_genes = [g for g in df_f.columns if g.startswith("MT-")]
+        if len(mito_genes) == 0:
+            logging.info("WARNING: No mitochondrial genes found in expression matrix!")
+            fig = plt.figure(figsize=[8, 8])
+            fig.add_axes([0.08, 0.08, 0.85, 0.85])
+            plt.savefig(args.output)
+            sys.exit()
+        df_annot["mitochondrial"] = df_f.loc[:, mito_genes].mean(axis=1)
 
     return df_annot
 
@@ -171,12 +192,15 @@ def main(args):
 
     df_annot = get_expression(args)
 
-    if not args.gene:
+    if (not args.gene) & (not args.mito_genes):
         logger.info("Plotting UMAP with total UMI counts")
         scatterplot(df, df_annot.loc[:, "total"], args)
-    else:
+    elif args.gene:
         logger.info(f"Plotting UMAP with {args.gene} annotations")
         scatterplot(df, df_annot.loc[:, args.gene], args)
+    elif args.mito_genes:
+        logger.info("Plotting UMAP with mitochrondrial gene annotations")
+        scatterplot(df, df_annot.loc[:, "mitochondrial"], args)
 
     # if args.target_cells:
     #     logger.info(f"Plotting UMAP with highlighted cells from {args.target_cells}")

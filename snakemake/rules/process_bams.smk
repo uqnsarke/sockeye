@@ -345,6 +345,21 @@ rule umap_plot_genes:
         "{input.umap} {input.matrix}"
 
 
+rule umap_plot_mito_genes:
+    input:
+        umap=MATRIX_UMAP_TSV,
+        matrix=MATRIX_PROCESSED_TSV,
+    output:
+        plot=MATRIX_UMAP_PLOT_MITO,
+    conda:
+        "../envs/plotting.yml"
+    shell:
+        "python {SCRIPT_DIR}/plot_umap.py "
+        "--mito_genes "
+        "--output {output.plot} "
+        "{input.umap} {input.matrix}"
+
+
 rule umi_gene_saturation:
     input:
         bam=BAM_FULLY_TAGGED,
