@@ -131,7 +131,7 @@ MATRIX_COUNTS_TSV = str(MATRIX_DIR / "gene_expression.counts.tsv")
 MATRIX_PROCESSED_TSV = str(MATRIX_DIR / "gene_expression.processed.tsv")
 MATRIX_UMAP_TSV = str(MATRIX_DIR / "gene_expression.umap.tsv")
 MATRIX_UMAP_PLOT_GENE = str(MATRIX_DIR / "umap.gene.{plot_gene}.png")
-MATRIX_UMAP_PLOT_MITO = str(MATRIX_DIR / "umap.gene.mitochondrial.png")
+MATRIX_UMAP_PLOT_MITO = str(MATRIX_DIR / "umap.mitochondrial.png")
 MATRIX_UMAP_PLOT_TOTAL = str(MATRIX_DIR / "umap.total.png")
 
 
