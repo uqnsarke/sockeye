@@ -266,9 +266,21 @@ def make_kneeplot(ont_bc, ilmn_bc, conserved_bc, args):
         fig = plt.figure(figsize=[6, 6])
         ax1 = fig.add_subplot(111)
 
+    # Only plot 50 cells for a given number of reads. This dramatically reduces
+    # the number of points to plot in the long tail, which is helpful when
+    # making vectorized images.
+    X = []
+    Y = []
+    n_counter = Counter()
+    for i, (b, n) in enumerate(ont_bc_sorted.items()):
+        n_counter[n] += 1
+        if n_counter[n] <= 50:
+            X.append(i)
+            Y.append(n)
+
     ax1.scatter(
-        range(len(ont_bc.keys())),
-        ont_bc_sorted.values(),
+        X,
+        Y,
         color="k",
         label="ONT",
         alpha=0.1,
