@@ -118,7 +118,11 @@ def scatterplot(df, values, args):
     if (values.name == "total") | (values.name == "mitochondrial"):
         cmap = cm.jet
     else:
-        cmap = cm.cool
+        #cmap = cm.cool
+        #cmap = cm.viridis_r
+        #cmap = cm.plasma_r
+        #cmap = cm.YlOrRd
+        cmap = cm.inferno_r
 
     plot = ax.scatter(
         df["D1"],
@@ -139,14 +143,16 @@ def scatterplot(df, values, args):
     if values.name == "highlight":
         title = f"{n_cells} cells: highlighted cells from {args.target_cells}"
     else:
-        title = f"{n_cells} cells: {values.name}"
-        plt.colorbar(plot)
+        #title = f"{n_cells} cells: {values.name}"
+        title = f"{values.name}"
+        cbar = plt.colorbar(plot)
+        cbar.set_label("Normalized expression", rotation=270, labelpad=15)
 
     ax.set_title(title)
     ax.set_xlabel("UMAP-1")
     ax.set_ylabel("UMAP-2")
 
-    plt.savefig(args.output)
+    plt.savefig(args.output, dpi=300)
 
 
 def get_expression(args):
@@ -181,16 +187,25 @@ def get_expression(args):
             plt.savefig(args.output)
             sys.exit()
         df_annot["mitochondrial"] = df_f.loc[:, mito_genes].mean(axis=1)
-
+    df_annot.index.names = ["barcode"]
     return df_annot
 
 
 def main(args):
     init_logger(args)
 
-    df = pd.read_csv(args.umap, delimiter="\t")
+    df = pd.read_csv(args.umap, delimiter="\t").set_index("barcode")
 
     df_annot = get_expression(args)
+
+    print(df.shape)
+    print(df_annot.shape)
+    print(df.head())
+    print(df_annot.head())
+
+    df = df.loc[df_annot.index]
+    print(df.shape)
+    print(df_annot.shape)
 
     if (not args.gene) & (not args.mito_genes):
         logger.info("Plotting UMAP with total UMI counts")
