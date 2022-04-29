@@ -558,7 +558,7 @@ def write_output_fastq(tmp_fastqs, args):
             with open(tmp_fastq, "rb") as f_:
                 shutil.copyfileobj(f_, f_out)
 
-    shutil.rmtree(args.tempdir)
+    shutil.rmtree(args.tempdir, ignore_errors=True)
 
 
 def write_tmp_fastx_files_for_processing(n_batches, args):
@@ -608,7 +608,7 @@ def main(args):
 
     # Create temp directory
     if os.path.exists(args.tempdir):
-        shutil.rmtree(args.tempdir)
+        shutil.rmtree(args.tempdir, ignore_errors=True)
     os.mkdir(args.tempdir)
 
     fastq_fns = write_tmp_fastx_files_for_processing(n_batches, args)

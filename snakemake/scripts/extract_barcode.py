@@ -505,7 +505,7 @@ def main(args):
 
     # Create temporary directory
     if os.path.exists(args.tempdir):
-        shutil.rmtree(args.tempdir)
+        shutil.rmtree(args.tempdir, ignore_errors=True)
     os.mkdir(args.tempdir)
 
     # Process BAM alignments from each chrom separately
@@ -539,7 +539,7 @@ def main(args):
     pysam.sort("-@", str(args.threads), "-o", args.output_bam, tmp_bam.name)
 
     logger.info("Cleaning up temporary files")
-    shutil.rmtree(args.tempdir)
+    shutil.rmtree(args.tempdir, ignore_errors=True)
 
 
 if __name__ == "__main__":

@@ -146,7 +146,7 @@ def main(args):
 
     # Create output directory
     if os.path.exists(args.output_dir):
-        shutil.rmtree(args.output_dir)
+        shutil.rmtree(args.output_dir, ignore_errors=True)
     os.mkdir(args.output_dir)
 
     # Write separately BAM file for each chromosome in args.output_dir

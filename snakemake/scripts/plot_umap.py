@@ -9,6 +9,7 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn
+from matplotlib.colors import LinearSegmentedColormap, ListedColormap
 
 logger = logging.getLogger(__name__)
 
@@ -70,7 +71,7 @@ def parse_args():
     )
 
     parser.add_argument(
-        "-a", "--alpha", help="Transpancy of markers [0.4]", type=float, default=0.4
+        "-a", "--alpha", help="Transpancy of markers [0.7]", type=float, default=0.7
     )
 
     parser.add_argument(
@@ -115,14 +116,15 @@ def scatterplot(df, values, args):
     fig = plt.figure(figsize=[8, 8])
     ax = fig.add_axes([0.08, 0.08, 0.85, 0.85])
 
+    # Create custom colormap from gray to blue
+    colors = ["lightgray", "blue"]
+    cmap_custom = LinearSegmentedColormap.from_list("bluegray", colors)
+
     if (values.name == "total") | (values.name == "mitochondrial"):
         cmap = cm.jet
     else:
-        #cmap = cm.cool
-        #cmap = cm.viridis_r
-        #cmap = cm.plasma_r
-        #cmap = cm.YlOrRd
-        cmap = cm.inferno_r
+        # cmap = cm.inferno_r
+        cmap = cmap_custom
 
     plot = ax.scatter(
         df["D1"],
@@ -143,7 +145,7 @@ def scatterplot(df, values, args):
     if values.name == "highlight":
         title = f"{n_cells} cells: highlighted cells from {args.target_cells}"
     else:
-        #title = f"{n_cells} cells: {values.name}"
+        # title = f"{n_cells} cells: {values.name}"
         title = f"{values.name}"
         cbar = plt.colorbar(plot)
         cbar.set_label("Normalized expression", rotation=270, labelpad=15)
@@ -198,14 +200,7 @@ def main(args):
 
     df_annot = get_expression(args)
 
-    print(df.shape)
-    print(df_annot.shape)
-    print(df.head())
-    print(df_annot.head())
-
     df = df.loc[df_annot.index]
-    print(df.shape)
-    print(df_annot.shape)
 
     if (not args.gene) & (not args.mito_genes):
         logger.info("Plotting UMAP with total UMI counts")
