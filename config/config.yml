@@ -1,31 +1,26 @@
-RUNS: "config/runs.csv"
+SAMPLE_SHEET: "config/samples.csv"
 
-OUTPUT_BASE: /home/OXFORDNANOLABS/jbeaulaurier/projects/packages/sockeye/snakemake/output
+OUTPUT_BASE: /home/OXFORDNANOLABS/jbeaulaurier/projects/packages/sockeye/output
 
 ################################################################################
-## 10x SUPPORTING FILES                                                         #
-#################################################################################
-## Reference files can be downloaded from the 10x website using either curl or wget:
-## For the human GRCh38 reference, the commands would be:
-## curl -O https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2020-A.tar.gz
-## or
-## wget https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2020-A.tar.gz
-#
-########## REF_GENOME_FASTA #########
-## REF_GENOME_FASTA refers the the genome fasta file located at:
-## <REFERENCE>/fasta/genome.fa
-REF_GENOME_FASTA: /mmfs1/data/active/shared/refgenome/10x_refs/refdata-gex-GRCh38-2020-A/fasta/genome.fa
+# 10x SUPPORTING FILES                                                         #
+################################################################################
+# Reference files can be downloaded from the 10x website using either curl or wget:
+# For the human GRCh38 reference, the commands would be:
+# curl -O https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2020-A.tar.gz
+# or
+# wget https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2020-A.tar.gz
 
-######### REF_GTF #########
-## REF_GTF refers the the gene annotation GTF file located at:
-## <REFERENCE>/genes/genes.gtf
-REF_GTF:          /mmfs1/data/active/shared/refgenome/10x_refs/refdata-gex-GRCh38-2020-A/genes/genes.gtf
+######### REF_GENOME_DIR #########
+# REF_GENOME_DIR refers the path to reference directory as downloaded from 10x,
+# e.g. PATH/TO/DOWNLOADED/refdata-gex-GRCh38-2020-A
+REF_GENOME_DIR: /mmfs1/data/active/shared/refgenome/10x_refs/refdata-gex-GRCh38-2020-A
 
 ######### BC_SUPERLIST #########
-## The 10x cell barcode full whitelist (BC_SUPERLIST) can be downloaded using:
-## wget https://github.com/10XGenomics/cellranger/raw/master/lib/python/cellranger/barcodes/3M-february-2018.txt.gz
-## BC_SUPERLIST path can point to either the .txt.gz or .txt file
-BC_SUPERLIST:  /mmfs1/data/active/shared/refgenome/10x_refs/3M-february-2018.txt
+# The 10x cell barcode full whitelist (BC_SUPERLIST) can be downloaded using:
+# wget https://github.com/10XGenomics/cellranger/raw/master/lib/python/cellranger/barcodes/3M-february-2018.txt.gz
+# BC_SUPERLIST path can point to either the .txt.gz or .txt file
+BC_SUPERLIST: /mmfs1/data/active/shared/refgenome/10x_refs/3M-february-2018.txt
 ################################################################################
 
 MAX_THREADS: 24

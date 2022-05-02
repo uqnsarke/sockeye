@@ -11,7 +11,7 @@ rule call_paftools:
 
 rule get_chrom_sizes:
     input:
-        genome=config["REF_GENOME_FASTA"] + ".fai",
+        genome=str(REF_GENOME_FASTA) + ".fai",
     output:
         chrsizes=REF_CHROM_SIZES,
     shell:
@@ -33,7 +33,7 @@ rule align_to_ref:
         sort_bam=BAM_SORT,
         sort_bam_bai=BAM_SORT_BAI,
     params:
-        ref=config["REF_GENOME_FASTA"],
+        ref=str(REF_GENOME_FASTA),
     threads: config["RESOURCES_MM2_MAX_THREADS"]
     resources:
         mem_gb=get_split_ont_align_mem_gb,

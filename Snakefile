@@ -18,12 +18,12 @@ SCRIPT_DIR = srcdir("scripts")
 #######################
 # Validate config.yml #
 #######################
-if not config.get("RUNS"):
-    raise Exception("Please define RUNS in the ./config/config.yml")
-elif not os.path.exists(config["RUNS"]):
-    raise Exception("Path specified for RUNS in config.yml not found!")
+if not config.get("SAMPLE_SHEET"):
+    raise Exception("Please define SAMPLE_SHEET in the ./config/config.yml")
+elif not os.path.exists(config["SAMPLE_SHEET"]):
+    raise Exception("Path specified for SAMPLE_SHEET in config.yml not found!")
 sample_sheet = pd.read_csv(
-    config.get("RUNS", "./config/runs.csv"), sep=",", comment="#"
+    config.get("SAMPLE_SHEET", "./config/samples.csv"), sep=",", comment="#"
 ).set_index("run_id", drop=True)
 RUN_IDS = sample_sheet.index
 
@@ -39,16 +39,13 @@ else:
                 shutil.copyfileobj(f_in, f_out)
         config["BC_SUPERLIST"] = config.get("BC_SUPERLIST").replace(".gz", "")
 
-if not config.get("REF_GENOME_FASTA"):
-    raise Exception("Please define REF_GENOME_FASTA in the ./config/config.yml")
-elif not os.path.exists(config["REF_GENOME_FASTA"]):
-    raise Exception("Path specified for REF_GENOME_FASTA in config.yml not found!")
-
-if not config.get("REF_GTF"):
-    raise Exception("Please define REF_GTF in the ./config/config.yml")
-elif not os.path.exists(config["REF_GTF"]):
-    raise Exception("Path specified for REF_GTF in config.yml not found!")
-REF_GENES_GTF = pathlib.Path(config["REF_GTF"])
+if not config.get("REF_GENOME_DIR"):
+    raise Exception("Please define REF_GENOME_IDR in the ./config/config.yml")
+elif not os.path.exists(config["REF_GENOME_DIR"]):
+    raise Exception("Path specified for REF_GENOME_DIR in config.yml not found!")
+REF_GENOME_DIR = pathlib.Path(config["REF_GENOME_DIR"])
+REF_GENOME_FASTA = REF_GENOME_DIR / "fasta/genome.fa"
+REF_GENES_GTF = REF_GENOME_DIR / "genes/genes.gtf"
 
 PLOT_GENES = config.get("UMAP_PLOT_GENES", None).split(",")
 

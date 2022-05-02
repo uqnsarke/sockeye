@@ -134,7 +134,7 @@ rule bam_to_bed:
 
 rule split_gtf_by_chroms:
     input:
-        config["REF_GTF"],
+        str(REF_GENES_GTF),
     output:
         CHROM_GTF,
     params:
