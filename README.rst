@@ -56,9 +56,7 @@ relevant pipeline configurations must be specified:
 Setting up the pipeline
 ^^^^^^^^^^^^^^^^^^^^^^
 
-The pipeline configurations are described in a YAML file
-
-``config/config.yml``
+The pipeline configurations are described in the YAML file ``config/config.yml``:
 
 ::
 
@@ -120,8 +118,68 @@ The pipeline configurations are described in a YAML file
    RESOURCES_MM2_MEM_GB: 50
    RESOURCES_MM2_MAX_THREADS: 4
 
+Most of the parameters defined in the ``config/config.yml`` file can normally remain unchanged. However, certain fields require editing, such as:
+
+::
+
+   OUTPUT_BASE     # Base directory where run_id-specific output folders will be written
+   REF_GENOME_DIR  # Path to the downloaded 10X reference data
+   BC_SUPERLIST    # Path to the downloaded 10X cell barcode whitelist (i.e. 3M-february-2018.txt.gz)
+   MAX_THREADS     # Maximum number of threads to use for various steps in the pipeline
+   UMAP_PLOT_GENES # Genes to annotate in UMAP plots
+
 Editing the sample sheet
 ^^^^^^^^^^^^
-The path to the sample sheet is defined in the ``config.yml`` file described above. This sample sheet contains details about the input run IDs and ONT read directory. The input read directory specified in the sample sheet can contain multiple ``*.fastq``, ``*.fq``, ``*.fastq.gz`` or ``*.fq.gz`` files, but all file extensions must be the same. A mixture of file extensions is not supported.
+The path to the sample sheet is defined by the ``SAMPLE_SHEET`` variable in the ``config.yml`` file described above (set to ``./config/samples.csv`` by default). This sample sheet contains details about the input run IDs and ONT read directory. Sockeye can launch analyses of multiple runs simultaneously, which is useful especially when submitting the analyses to a compute cluster.
+
+The input read directory specified in the sample sheet can contain multiple ``*.fastq``, ``*.fq``, ``*.fastq.gz`` or ``*.fq.gz`` files, but all file extensions must be the same. A mixture of file extensions is not supported.
 
 ``config/samples.csv``
+
+::
+
+   run_id,path
+   run1,/PATH/TO/ONT/READS1.fq.gz
+   run2,/PATH/TO/ONT/READS2.fq.gz
+   run3,/PATH/TO/ONT/READS3.fq.gz
+
+Launching Sockeye
+^^^^^^^^^^^^^^^^^
+
+Once the Sockeye environment has been created and activated (see Installation above) and both the ``config.yml`` and ``samples.csv`` files have been edited, the Sockeye pipeline is ready to be launched.
+
+Launch Sockeye locally from the Sockeye repository using:
+
+::
+
+   snakemake --use-conda --configfile config/config.yml -pr all
+
+If your cluster system supports Distributed Resource Management Application API (DRMAA), you can submit the Sockeye pipeline to your job scheduler using:
+::
+
+   snakemake --configfile config/config.yml --latency-wait 300 --drmaa ' -V -cwd -P applications -l m_mem_free={resources.mem}G -pe mt {threads} ' --default-resources mem=1 --jobs 1000 --use-conda --drmaa-log-dir ./drmaa_logs -pr all
+
+More details on cluster execution for various systems can be found `here <https://snakemake.readthedocs.io/en/stable/executing/cluster.html>`_.
+
+Pipeline output
+---------------
+
+The pipeline output will be written to a directory defined by ``OUTPUT_BASE`` in the ``config/config.yml`` file. For instance, using the example ``config/config.yml`` and ``config/sample_sheet.csv`` files shown above, the pipeline output would be written to three separate directories, one for each ``run_id``:
+
+::
+
+   /PATH/TO/OUTPUT/BASE/DIRECTORY/run1
+   /PATH/TO/OUTPUT/BASE/DIRECTORY/run2
+   /PATH/TO/OUTPUT/BASE/DIRECTORY/run3
+
+Each run_id-specific output folder will contain the following subdirectories:
+
+::
+
+   /PATH/TO/OUTPUT/BASE/DIRECTORY/run1
+   |
+   |-- adapters   # contains output from the characterization of read structure based on adapters
+   |-- align      # output from the alignment to the reference
+   |-- demux      # demultiplexing results, primarily in the tagged.sorted.bam file
+   |-- matrix     # gene expression matrix and UMAP outputs
+   \-- saturation # plots describing the library sequencing saturation
