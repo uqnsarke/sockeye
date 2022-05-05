@@ -210,19 +210,19 @@ The most useful outputs of the pipeline are likely:
   - ``MATRIX_MAX_MITO``: cells with more than this percentage of counts belonging to mitochondrial genes will be removed
   - ``MATRIX_NORM_COUNT``: normalize all cells to this number of total counts per cell
 
-  License and Copyright
-  ---------------------
+License and Copyright
+---------------------
 
-  |copy| 2020-22 Oxford Nanopore Technologies Ltd.
+|copy| 2020-22 Oxford Nanopore Technologies Ltd.
 
-  .. |copy| unicode:: 0xA9 .. copyright sign
+.. |copy| unicode:: 0xA9 .. copyright sign
 
-  Sockeye is distributed under the terms of the Oxford Nanopore
-  Technologies, Ltd.  Public License, v. 1.0.  If a copy of the License
-  was not distributed with this file, You can obtain one at
-  http://nanoporetech.com
+Sockeye is distributed under the terms of the Oxford Nanopore
+Technologies, Ltd.  Public License, v. 1.0.  If a copy of the License
+was not distributed with this file, You can obtain one at
+http://nanoporetech.com
 
-  Research Release
-  ----------------
+Research Release
+----------------
 
-  Research releases are provided as technology demonstrators to provide early access to features or stimulate Community development of tools. Support for this software will be minimal and is only provided directly by the developers. Feature requests, improvements, and discussions are welcome and can be implemented by forking and pull requests. However much as we would like to rectify every issue and piece of feedback users may have, the developers may have limited resource for support of this software. Research releases may be unstable and subject to rapid iteration by Oxford Nanopore Technologies.
+Research releases are provided as technology demonstrators to provide early access to features or stimulate Community development of tools. Support for this software will be minimal and is only provided directly by the developers. Feature requests, improvements, and discussions are welcome and can be implemented by forking and pull requests. However much as we would like to rectify every issue and piece of feedback users may have, the developers may have limited resource for support of this software. Research releases may be unstable and subject to rapid iteration by Oxford Nanopore Technologies.
