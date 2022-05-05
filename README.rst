@@ -50,8 +50,40 @@ that contains the necessary packages for calling the Snakemake pipeline:
 Getting Started
 ---------------
 
-Prior to demultiplexing any nanopore reads, sample sheet information and
-relevant pipeline configurations must be specified:
+Prior to demultiplexing any nanopore reads, pipeline configurations and sample sheet information must be specified:
+
+Downloading reference data
+^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+The pipeline requires access to reference data files that are packaged and freely available from 10X Genomics. For human samples, the GRCh38 packaged reference files can be downloaded using either ``curl`` or ``wget`` using:
+
+::
+
+   cd /PATH/TO/10X/DOWNLOADS
+   curl -O https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2020-A.tar.gz
+   tar -xvf refdata-gex-GRCh38-2020-A.tar.gz
+
+or 
+
+::
+
+   cd /PATH/TO/10X/DOWNLOADS
+   wget https://cf.10xgenomics.com/supp/cell-exp/refdata-gex-GRCh38-2020-A.tar.gz
+   tar -xvf refdata-gex-GRCh38-2020-A.tar.gz
+
+Once downloaded, specify the full path to the packaged reference directory (e.g. ``refdata-gex-GRCh38-2020-A``) in the ``config/config.yml`` file using the ``REF_GENOME_DIR`` variable.
+
+Downloading 10X cell barcode list
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+In addition to the reference data, Sockeye also requires the list of all possible 10x cell barcodes. This file can be downloaded using:
+
+::
+
+   cd /PATH/TO/10X/DOWNLOADS
+   wget https://github.com/10XGenomics/cellranger/raw/master/lib/python/cellranger/barcodes/3M-february-2018.txt.gz
+   
+Once downloaded, specify the full path to the cell barcode list (e.g. ``3M-february-2018.txt.gz``) in the ``config/config.yml`` file using the ``BC_SUPERLIST`` variable.
 
 Setting up the pipeline
 ^^^^^^^^^^^^^^^^^^^^^^
