@@ -77,7 +77,14 @@ def init_logger(args):
 
 
 def load_gtf(args):
-    """ """
+    """
+    Load the GTF file of reference gene annotations.
+
+    :param args: object containing all supplied arguments
+    :type args: class argparse.Namespace
+    :return: dataframe of gene annotation intervals
+    :rtype: pandas dataFrame
+    """
     cols = [
         "chrom",
         "source",
@@ -98,12 +105,19 @@ def load_gtf(args):
         df["attribute"] = df["attribute"].str.split(";", expand=True).iloc[:, 3]
         df["attribute"] = df["attribute"].str.split(" ", expand=True).iloc[:, -1]
         df["attribute"] = df["attribute"].str.replace('"', "")
+
     return df
 
 
 def load_bed(args):
     """
-    Maybe use bioframe.io.read_bigbed if these files are too big.
+    Read in the BED file of alignment intervals. BED file created by running
+    bedtools bamtobed -i <BAM>
+
+    :param args: object containing all supplied arguments
+    :type args: class argparse.Namespace
+    :return: dataframe of alignment intervals
+    :rtype: pandas dataFrame
     """
     cols = [
         "chrom",
@@ -124,7 +138,15 @@ def load_bed(args):
 
 def assign_status_low_mapq(df, args):
     """
-    Assign all reads with ambiguous mapping as "Unassigned_mapq"
+    Assign all reads with ambiguous mapping as "Unassigned_mapq" and set the
+    assigned gene to NA.
+
+    :param df: dataframe of all gene annotation assignments per alignment
+    :type df: pandas dataFrame
+    :param args: object containing all supplied arguments
+    :type args: class argparse.Namespace
+    :return: dataframe of gene annotation assignments with Unassigned_mapq labels
+    :rtype: pandas dataFrame
     """
     df.loc[df["score"] < args.mapq, "status"] = "Unassigned_mapq"
     df.loc[df["score"] < args.mapq, "gene"] = "NA"
@@ -134,7 +156,12 @@ def assign_status_low_mapq(df, args):
 def assign_status_ambiguous_overlap(df):
     """
     Assign all reads with equal overlap with multiple features as
-    "Unassigned_ambiguous"
+    "Unassigned_ambiguous" and set gene assignment to NA
+
+    :param df: dataframe of all gene annotation assignments per alignment
+    :type df: pandas dataFrame
+    :return: dataframe of gene annotation assignments with Unassigned_ambiguous labels
+    :rtype: pandas dataFrame
     """
     is_ambiguous = df[df["status"] == "Unknown"].duplicated(
         subset=["index_bed", "overlap_bp"], keep=False
@@ -150,6 +177,11 @@ def assign_status_ambiguous_overlap(df):
 def assign_status_no_features(df):
     """
     Assign all reads without any features as "Unassigned_no_features"
+
+    :param df: dataframe of all gene annotation assignments per alignment
+    :type df: pandas dataFrame
+    :return: dataframe of gene annotation assignments with Unassigned_no_features labels
+    :rtype: pandas dataFrame
     """
     df.loc[df["gene"] == 0, "status"] = "Unassigned_no_features"
     df.loc[df["gene"] == 0, "gene"] = "NA"
@@ -158,7 +190,13 @@ def assign_status_no_features(df):
 
 def find_largest_overlap(df):
     """
-    Find the largest overlap when multiple overlaps are present.
+    Find the largest overlap when multiple overlaps are present. Label the longest
+    overlap as Assigned and drop the shorter overlaps from the dataframe.
+
+    :param df: dataframe of all gene annotation assignments per alignment
+    :type df: pandas dataFrame
+    :return: dataframe of gene annotation assignments with Assigned label
+    :rtype: pandas dataFrame
     """
     # Find the indices of the largest overlap for each alignment entry
     max_ovlp_idx = df.groupby(["index_bed"])["overlap_bp"].idxmax().sort_values().values
@@ -171,7 +209,20 @@ def find_largest_overlap(df):
 
 
 def get_overlaps(bed, gtf):
-    """ """
+    """
+    Use bioframe to identify overlaps between the alignment and gene annotation
+    intervals.
+
+    :param bed: dataframe containing alignment intervals
+    :type bed: pandas dataFrame
+    :param gtf: dataframe containing gene annotation intervals
+    :type gtf: pandas dataFrame
+    :return: dataframe of annotations per alignment based on overlaps
+    :rtype: pandas dataFrame
+    """
+
+    # how="left" means that the returned dataframe contains all alignments,
+    # regardless of whether it overlapped with any annotation intervals.
     df = bf.overlap(
         bed,
         gtf,
@@ -181,7 +232,7 @@ def get_overlaps(bed, gtf):
         return_index=True,
     )
 
-    # !!!Now keeping index_bed to keep track of the input order. We'll want to
+    # Now keeping index_bed to keep track of the input order. We'll want to
     # get the largest overlap for each index_bed value, which will properly
     # handle the issue of supplementary alignments in the BAM.
 
@@ -215,7 +266,16 @@ def get_overlaps(bed, gtf):
 
 
 def process_bed_chunk(bed_chunk, gtf, args):
-    """ """
+    """
+    Read in the chunked bed dataframe and the chromosome-specific GTF reference.
+    Find the alignment/annotation overlaps using bioframe and assign a gene
+    based on the results.
+
+    :param args: object containing all supplied arguments
+    :type args: class argparse.Namespace
+    :return: dataframe of alignment intervals
+    :rtype: pandas dataFrame
+    """
     # The bed file has alignments and the chromosome has annotations,
     # so process the overlaps
     df_chunk = get_overlaps(bed_chunk, gtf)
@@ -228,14 +288,12 @@ def process_bed_chunk(bed_chunk, gtf, args):
     df_chunk = df_chunk[["read", "status", "score", "gene", "index_bed"]]
 
     df_chunk = df_chunk.reset_index(drop=True)
-    # print(df_chunk.groupby("status")["index_bed"].nunique())
     df_chunk = df_chunk.drop(["index_bed"], axis=1)
 
     return df_chunk
 
 
 def main(args):
-    pd.set_option("display.max_rows", None)
     gtf = load_gtf(args)
     bed = load_bed(args)
 
