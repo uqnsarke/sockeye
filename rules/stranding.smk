@@ -19,7 +19,7 @@ checkpoint call_cat_fastq:
     conda:
         "../envs/stranding.yml"
     shell:
-        "python {SCRIPT_DIR}/cat_fastqs.py "
+        "python {SCRIPT_DIR}/chunk_fastqs.py "
         "--threads {threads} "
         "--output_dir {output.dir} "
         "{input}"

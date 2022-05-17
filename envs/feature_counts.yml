@@ -1,9 +1,0 @@
-name: feature_counts
-channels:
-  - conda-forge
-  - bioconda
-dependencies:
-  - seqkit
-  - samtools>=1.10
-  - minimap2
-  - subread
