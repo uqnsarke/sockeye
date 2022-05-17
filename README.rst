@@ -33,7 +33,7 @@ Package dependencies
 
 The Sockeye pipeline makes use of the following dependencies. No manual
 installation is required, as these are all installed automatically into a series
-of `conda` environments that are created throughout the course of a pipeline
+of ``conda`` environments that are created throughout the course of a pipeline
 run:
 
 - bedtools [1_]
@@ -55,7 +55,7 @@ run:
 
 Additionally, while no explicit dependency exists for the
 `UMI-tools <https://github.com/CGATOxford/UMI-tools>`_ package  [17_], the Sockeye script
-`cluster_umis.py` makes significant use of several functions from
+``cluster_umis.py`` makes significant use of several functions from
 the package.
 
 Installation
