@@ -1,3 +1,10 @@
+# This code makes significant use of the UMI-tools package (MIT license).
+#
+# https://github.com/CGATOxford/UMI-tools
+# https://genome.cshlp.org/content/early/2017/01/18/gr.209601.116.abstract
+#
+# The specific functions borrowed or modified are documented below in comments
+
 import argparse
 import collections
 import itertools
@@ -93,6 +100,11 @@ def init_logger(args):
 
 
 def breadth_first_search(node, adj_list):
+    """
+    This function has been copied from the UMI-tools package, originally found
+    in the networks.py source code here:
+    https://github.com/CGATOxford/UMI-tools/blob/c3ead0792ad590822ca72239ef01b8e559802da9/umi_tools/network.py#L21
+    """
     searched = set()
     queue = set()
     queue.update((node,))
@@ -110,8 +122,15 @@ def breadth_first_search(node, adj_list):
 
 def get_adj_list_directional(umis, counts, threshold=2):
     """
-    identify all umis within the LEVENSHTEIN distance threshold
-    and where the counts of the first umi is > (2 * second umi counts)-1
+    Identify all umis within the LEVENSHTEIN distance threshold
+    and where the counts of the first umi is > (2 * second umi counts)-1.
+
+    This function from UMI-tools has been modified to use Levenshtein distance
+    instead of hamming distance.
+
+    This function has been modified from the UMI-tools package, originally found
+    in the network.py source code here:
+    https://github.com/CGATOxford/UMI-tools/blob/c3ead0792ad590822ca72239ef01b8e559802da9/umi_tools/network.py#L187
     """
 
     adj_list = {umi: [] for umi in umis}
@@ -129,6 +148,10 @@ def get_adj_list_directional(umis, counts, threshold=2):
 def get_connected_components_adjacency(umis, graph, counts):
     """
     find the connected UMIs within an adjacency dictionary
+
+    This function has been copied from the UMI-tools package, originally found
+    in the network.py source code here:
+    https://github.com/CGATOxford/UMI-tools/blob/c3ead0792ad590822ca72239ef01b8e559802da9/umi_tools/network.py#L213
     """
 
     # TS: TO DO: Work out why recursive function doesn't lead to same
@@ -154,6 +177,10 @@ def get_connected_components_adjacency(umis, graph, counts):
 def group_directional(clusters, adj_list, counts):
     """
     return groups for directional method
+
+    This function has been copied from the UMI-tools package, originally found
+    in the network.py source code here:
+    https://github.com/CGATOxford/UMI-tools/blob/c3ead0792ad590822ca72239ef01b8e559802da9/umi_tools/network.py#L250
     """
 
     observed = set()

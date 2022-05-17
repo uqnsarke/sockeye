@@ -7,7 +7,6 @@ dependencies:
   - pandas
   - tqdm
   - numpy
-  - biopython
   - seqkit
   - pysam>=0.16.0
   - vsearch==2.15.1
