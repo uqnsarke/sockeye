@@ -18,9 +18,6 @@ instrument and reference files that can be downloaded from `10X
 The pipeline outputs a gene x cell expression matrix, as well as a BAM file of
 aligned reads tagged with cell barcode and UMI information.
 
-Detailed documentation for all Sockeye commands and algorithms can be found on
-the `Sockeye documentation page <https://nanoporetech.github.io/sockeye/>`_.
-
 Prerequisites
 -------------
 
