@@ -217,7 +217,7 @@ Launch Sockeye locally from the Sockeye repository using:
 If your cluster system supports Distributed Resource Management Application API (DRMAA), you can submit the Sockeye pipeline to your job scheduler using:
 ::
 
-   snakemake --configfile config/config.yml --latency-wait 300 --drmaa ' -V -cwd -P applications -l m_mem_free={resources.mem}G -pe mt {threads} ' --default-resources mem=1 --jobs 1000 --use-conda --drmaa-log-dir ./drmaa_logs -pr all
+   snakemake --configfile config/config.yml --latency-wait 300 --drmaa ' -V -cwd -P <cluster_profile> -l m_mem_free={resources.mem}G -pe mt {threads} ' --default-resources mem=1 --jobs 1000 --use-conda --drmaa-log-dir ./drmaa_logs -pr all
 
 More details on cluster execution for various systems can be found `here <https://snakemake.readthedocs.io/en/stable/executing/cluster.html>`_.
 
