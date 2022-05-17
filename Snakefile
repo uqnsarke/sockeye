@@ -1,5 +1,6 @@
 import pathlib
 import os
+import sys
 import gzip
 import shutil
 import pandas as pd
@@ -9,7 +10,16 @@ from snakemake.utils import validate, min_version
 
 
 ##### load config and point to scripts #####
-configfile: "config/config.yml"
+#configfile: "config/config.yml"
+if "--configfile" in sys.argv:
+    i = sys.argv.index("--configfile")
+    config_path = sys.argv[i+1]
+    configfile: config_path
+    print("YOYOYOYOYOYOY")
+else:
+    print("HEYHEYHEY")
+    config_path = "config/config.yml"
+    configfile: config_path
 
 
 SCRIPT_DIR = srcdir("scripts")
@@ -19,18 +29,19 @@ SCRIPT_DIR = srcdir("scripts")
 # Validate config.yml #
 #######################
 if not config.get("SAMPLE_SHEET"):
-    raise Exception("Please define SAMPLE_SHEET in the ./config/config.yml")
+    print(config_path)
+    raise Exception(f"Please define SAMPLE_SHEET in the {config_path}")
 elif not os.path.exists(config["SAMPLE_SHEET"]):
-    raise Exception("Path specified for SAMPLE_SHEET in config.yml not found!")
+    raise Exception(f"Path specified for SAMPLE_SHEET in {config_path} not found!")
 sample_sheet = pd.read_csv(
     config.get("SAMPLE_SHEET", "./config/samples.csv"), sep=",", comment="#"
 ).set_index("run_id", drop=True)
 RUN_IDS = sample_sheet.index
 
 if not config.get("BC_SUPERLIST"):
-    raise Exception("Please define BC_SUPERLIST in the ./config/config.yml")
+    raise Exception(f"Please define BC_SUPERLIST in the {config_path}")
 elif not os.path.exists(config["BC_SUPERLIST"]):
-    raise Exception("Path specified for BC_SUPERLIST in config.yml not found!")
+    raise Exception(f"Path specified for BC_SUPERLIST in {config_path} not found!")
 else:
     if ".gz" in config.get("BC_SUPERLIST"):
         # Extract the gzipped file and update config dict
@@ -40,9 +51,9 @@ else:
         config["BC_SUPERLIST"] = config.get("BC_SUPERLIST").replace(".gz", "")
 
 if not config.get("REF_GENOME_DIR"):
-    raise Exception("Please define REF_GENOME_IDR in the ./config/config.yml")
+    raise Exception(f"Please define REF_GENOME_DIR in the {config_path}")
 elif not os.path.exists(config["REF_GENOME_DIR"]):
-    raise Exception("Path specified for REF_GENOME_DIR in config.yml not found!")
+    raise Exception(f"Path specified for REF_GENOME_DIR in {config_path} not found!")
 REF_GENOME_DIR = pathlib.Path(config["REF_GENOME_DIR"])
 REF_GENOME_FASTA = REF_GENOME_DIR / "fasta/genome.fa"
 REF_GENES_GTF = REF_GENOME_DIR / "genes/genes.gtf"
