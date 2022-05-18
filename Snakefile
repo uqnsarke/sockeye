@@ -10,15 +10,17 @@ from snakemake.utils import validate, min_version
 
 
 ##### load config and point to scripts #####
-#configfile: "config/config.yml"
+# configfile: "config/config.yml"
 if "--configfile" in sys.argv:
     i = sys.argv.index("--configfile")
-    config_path = sys.argv[i+1]
+    config_path = sys.argv[i + 1]
+
     configfile: config_path
-    print("YOYOYOYOYOYOY")
+
+
 else:
-    print("HEYHEYHEY")
     config_path = "config/config.yml"
+
     configfile: config_path
 
 
@@ -164,7 +166,6 @@ wildcard_constraints:
 rule all:
     input:
         expand(CONFIG_STATS, run_id=RUN_IDS),
-        expand(CELL_UMI_GENE_TSV, run_id=RUN_IDS),
         expand(MATRIX_UMAP_TSV, run_id=RUN_IDS),
         expand(SAT_PLOT, run_id=RUN_IDS),
         expand(MATRIX_UMAP_PLOT_TOTAL, run_id=RUN_IDS),

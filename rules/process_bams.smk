@@ -268,6 +268,18 @@ rule count_cell_gene_umi_reads:
         "{input.bam} "
 
 
+rule umi_gene_saturation:
+    input:
+        tsv=CELL_UMI_GENE_TSV,
+    output:
+        plot=SAT_PLOT,
+    conda:
+        "../envs/plotting.yml"
+    shell:
+        "python {SCRIPT_DIR}/calc_saturation.py "
+        "--output {output.plot} {input.tsv}"
+
+
 rule construct_expression_matrix:
     input:
         bam=BAM_FULLY_TAGGED,
@@ -358,17 +370,3 @@ rule umap_plot_mito_genes:
         "--mito_genes "
         "--output {output.plot} "
         "{input.umap} {input.matrix}"
-
-
-rule umi_gene_saturation:
-    input:
-        bam=BAM_FULLY_TAGGED,
-        bai=BAM_FULLY_TAGGED_BAI,
-    output:
-        plot=SAT_PLOT,
-    conda:
-        "../envs/plotting.yml"
-    shell:
-        "touch {input.bai}; "
-        "python {SCRIPT_DIR}/saturation.py "
-        "--output {output.plot} {input.bam}"
