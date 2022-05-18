@@ -6,6 +6,7 @@ channels:
 dependencies:
   - pandas
   - tqdm
+  - biopython
   - numpy
   - seqkit
   - pysam>=0.16.0

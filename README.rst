@@ -35,23 +35,24 @@ run:
 
 - bedtools [1_]
 - bioframe [2_]
-- editdistance [3_]
-- matplotlib [4_]
-- minimap2 [5_]
-- numpy [6_]
-- pandas [7_]
-- parasail-python [8_]
-- pysam [9_]
-- samtools [10_]
-- scikit-learn [11_]
-- seaborn [12_]
-- seqkit [13_]
-- tqdm [14_]
-- umap-learn [15_]
-- vsearch [16_]
+- biopython [3_]
+- editdistance [4_]
+- matplotlib [5_]
+- minimap2 [6_]
+- numpy [7_]
+- pandas [8_]
+- parasail-python [9_]
+- pysam [10_]
+- samtools [11_]
+- scikit-learn [12_]
+- seaborn [13_]
+- seqkit [14_]
+- tqdm [15_]
+- umap-learn [16_]
+- vsearch [17_]
 
 Additionally, while no explicit dependency exists for the
-`UMI-tools <https://github.com/CGATOxford/UMI-tools>`_ package  [17_], the Sockeye script
+`UMI-tools <https://github.com/CGATOxford/UMI-tools>`_ package  [18_], the Sockeye script
 ``cluster_umis.py`` makes significant use of several functions from
 the package.
 
@@ -216,7 +217,7 @@ Launch Sockeye locally from the Sockeye repository using:
 If your cluster system supports Distributed Resource Management Application API (DRMAA), you can submit the Sockeye pipeline to your job scheduler using:
 ::
 
-   snakemake --configfile config/config.yml --latency-wait 300 --drmaa ' -V -cwd -P applications -l m_mem_free={resources.mem}G -pe mt {threads} ' --default-resources mem=1 --jobs 1000 --use-conda --drmaa-log-dir ./drmaa_logs -pr all
+   snakemake --configfile config/config.yml --latency-wait 300 --drmaa ' -V -cwd -P <cluster_profile> -l m_mem_free={resources.mem}G -pe mt {threads} ' --default-resources mem=1 --jobs 1000 --use-conda --drmaa-log-dir ./drmaa_logs -pr all
 
 More details on cluster execution for various systems can be found `here <https://snakemake.readthedocs.io/en/stable/executing/cluster.html>`_.
 
@@ -274,21 +275,22 @@ References
 
 .. [1] Quinlan AR and Hall IM, 2010. BEDTools: a flexible suite of utilities for comparing genomic features. Bioinformatics. 26, 6, pp. 841–842.
 .. [2] Bioframe: Operations on Genomic Intervals in Pandas Dataframes. Open2C, Nezar Abdennur, Geoffrey Fudenberg, Ilya Flyamer, Aleksandra A. Galitsyna, Anton Goloborodko, Maxim Imakaev, Sergey V. Venev. bioRxiv 2022.02.16.480748; doi: https://doi.org/10.1101/2022.02.16.480748
-.. [3] https://github.com/roy-ht/editdistance
-.. [4] Hunter, J. D. Matplotlib: A 2D graphics environment. Computing in Science \& Engineering. 9, 3, pp. 90-95.
-.. [5] Li, H. (2018). Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics, 34:3094-3100. doi:10.1093/bioinformatics/bty191
-.. [6] Harris, C.R., Millman, K.J., van der Walt, S.J. et al. Array programming with NumPy. Nature 585, 357–362 (2020). DOI: 10.1038/s41586-020-2649-2.
-.. [7] McKinney, W. et al. Data structures for statistical computing in python. In Proceedings of the 9th Python in Science Conference. 2010. pp. 51–56.
-.. [8] Daily, J. (2016). Parasail: SIMD C library for global, semi-global, and local pairwise sequence alignments. BMC Bioinformatics, 17(1), 1-11. doi:10.1186/s12859-016-0930-z
-.. [9] Li H., Handsaker B., Wysoker A., Fennell T., Ruan J., Homer N., Marth G., Abecasis G., Durbin R. and 1000 Genome Project Data Processing Subgroup (2009) The Sequence alignment/map (SAM) format and SAMtools. Bioinformatics, 25, 2078-9.
+.. [3] Cock PA, et al. (2009) Biopython: freely available Python tools for computational molecular biology and bioinformatics. Bioinformatics, 25, 1422-1423.
+.. [4] https://github.com/roy-ht/editdistance
+.. [5] Hunter, J. D. Matplotlib: A 2D graphics environment. Computing in Science \& Engineering. 9, 3, pp. 90-95.
+.. [6] Li, H. (2018). Minimap2: pairwise alignment for nucleotide sequences. Bioinformatics, 34:3094-3100. doi:10.1093/bioinformatics/bty191
+.. [7] Harris, C.R., Millman, K.J., van der Walt, S.J. et al. Array programming with NumPy. Nature 585, 357–362 (2020). DOI: 10.1038/s41586-020-2649-2.
+.. [8] McKinney, W. et al. Data structures for statistical computing in python. In Proceedings of the 9th Python in Science Conference. 2010. pp. 51–56.
+.. [9] Daily, J. (2016). Parasail: SIMD C library for global, semi-global, and local pairwise sequence alignments. BMC Bioinformatics, 17(1), 1-11. doi:10.1186/s12859-016-0930-z
 .. [10] Li H., Handsaker B., Wysoker A., Fennell T., Ruan J., Homer N., Marth G., Abecasis G., Durbin R. and 1000 Genome Project Data Processing Subgroup (2009) The Sequence alignment/map (SAM) format and SAMtools. Bioinformatics, 25, 2078-9.
-.. [11] Pedregosa et al. Scikit-learn: Machine Learning in Python. JMLR 12, pp. 2825-2830, 2011.
-.. [12] Waskom, M. et al., 2017. mwaskom/seaborn: v0.8.1 (September 2017), Zenodo. Available at: https://doi.org/10.5281/zenodo.883859.
-.. [13] Shen, W., Le, S., Li, Y. & Hu, F. SeqKit: A Cross-Platform and Ultrafast Toolkit for FASTA/Q File Manipulation. PLoS One 11, e0163962, doi:10.1371/journal.pone.0163962 (2016).
-.. [14] https://github.com/tqdm/tqdm
-.. [15] McInnes, L, Healy, J, UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction, ArXiv e-prints 1802.03426, 2018.
-.. [16] Rognes T, Flouri T, Nichols B, Quince C, Mahé F. (2016) VSEARCH: a versatile open source tool for metagenomics. PeerJ 4:e2584. doi: 10.7717/peerj.2584
-.. [17] Smith T.S., Heger A., and Sudbery I. UMI-tools: Modelling sequencing errors in Unique Molecular Identifiers to improve quantification accuracy. Genome Res. 2017;27:491–9.
+.. [11] Li H., Handsaker B., Wysoker A., Fennell T., Ruan J., Homer N., Marth G., Abecasis G., Durbin R. and 1000 Genome Project Data Processing Subgroup (2009) The Sequence alignment/map (SAM) format and SAMtools. Bioinformatics, 25, 2078-9.
+.. [12] Pedregosa et al. Scikit-learn: Machine Learning in Python. JMLR 12, pp. 2825-2830, 2011.
+.. [13] Waskom, M. et al., 2017. mwaskom/seaborn: v0.8.1 (September 2017), Zenodo. Available at: https://doi.org/10.5281/zenodo.883859.
+.. [14] Shen, W., Le, S., Li, Y. & Hu, F. SeqKit: A Cross-Platform and Ultrafast Toolkit for FASTA/Q File Manipulation. PLoS One 11, e0163962, doi:10.1371/journal.pone.0163962 (2016).
+.. [15] https://github.com/tqdm/tqdm
+.. [16] McInnes, L, Healy, J, UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction, ArXiv e-prints 1802.03426, 2018.
+.. [17] Rognes T, Flouri T, Nichols B, Quince C, Mahé F. (2016) VSEARCH: a versatile open source tool for metagenomics. PeerJ 4:e2584. doi: 10.7717/peerj.2584
+.. [18] Smith T.S., Heger A., and Sudbery I. UMI-tools: Modelling sequencing errors in Unique Molecular Identifiers to improve quantification accuracy. Genome Res. 2017;27:491–9.
 
 License and Copyright
 ---------------------
