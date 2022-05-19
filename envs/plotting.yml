@@ -9,4 +9,3 @@ dependencies:
   - pysam==0.15.3
   - samtools>=1.10
   - matplotlib
-  - seaborn
