@@ -49,6 +49,15 @@ def parse_args():
 
     # Optional arguments
     parser.add_argument(
+        "-k",
+        "--kit",
+        help="Specify either the 10X 3' (3prime) or 5' (5prime) gene expression \
+        kit [3prime]",
+        default="3prime",
+        type=str,
+    )
+
+    parser.add_argument(
         "-r",
         "--read1_adapter",
         help="Read1 adapter sequence to use in the alignment query \
@@ -71,7 +80,8 @@ def parse_args():
     parser.add_argument(
         "-T",
         "--polyT_length",
-        help="Length of polyT sequence to use in the alignment query [10]",
+        help="Length of polyT sequence to use in the alignment query (ignored \
+        with --kit 5prime) [10]",
         type=int,
         default=10,
     )
@@ -93,9 +103,9 @@ def parse_args():
 
     parser.add_argument(
         "--umi_length",
-        help="UMI length [10]",
+        help="UMI length [12]",
         type=int,
-        default=10,
+        default=12,
     )
 
     parser.add_argument(
@@ -165,6 +175,10 @@ def parse_args():
 
     # Parse arguments
     args = parser.parse_args()
+
+    # verify kit selection
+    if (args.kit != "3prime") and (args.kit != "5prime"):
+        raise Exception("Invalid kit name! Specify either 3prime or 5prime.")
 
     # Create temp dir and add that to the args object
     p = pathlib.Path(args.output_bam)
@@ -384,13 +398,25 @@ def align_adapter(tup):
 
     # Use only the specified suffix length of the read1 adapter
     read1_probe_seq = args.read1_adapter[-args.read1_suff_length :]
-    # Compile the actual probe sequence of <read1_suffix>NNN...NNN<TTTTT....>
-    probe_seq = "{r}{bc}{umi}{pT}".format(
-        r=read1_probe_seq,
-        bc="N" * args.barcode_length,
-        umi="N" * args.umi_length,
-        pT="T" * args.polyT_length,
-    )
+
+    if args.kit == "3prime":
+        # Compile the actual probe sequence of <read1_suffix>NNN...NNN<TTTTT....>
+        probe_seq = "{r}{bc}{umi}{pT}".format(
+            r=read1_probe_seq,
+            bc="N" * args.barcode_length,
+            umi="N" * args.umi_length,
+            pT="T" * args.polyT_length,
+        )
+    elif args.kit == "5prime":
+        # Compile the actual probe sequence of <read1_suffix>NNN...NNN<TTTCTTATATGGG>
+        probe_seq = "{r}{bc}{umi}{tso}".format(
+            r=read1_probe_seq,
+            bc="N" * args.barcode_length,
+            umi="N" * args.umi_length,
+            tso="TTTCTTATATGGG",
+        )
+    else:
+        raise Exception("Invalid kit name! Specify either 3prime or 5prime.")
 
     bam = pysam.AlignmentFile(bam_path, "rb")
 
