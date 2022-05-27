@@ -45,14 +45,13 @@ run:
 - pysam [10_]
 - samtools [11_]
 - scikit-learn [12_]
-- seaborn [13_]
-- seqkit [14_]
-- tqdm [15_]
-- umap-learn [16_]
-- vsearch [17_]
+- seqkit [13_]
+- tqdm [14_]
+- umap-learn [15_]
+- vsearch [16_]
 
 Additionally, while no explicit dependency exists for the
-`UMI-tools <https://github.com/CGATOxford/UMI-tools>`_ package  [18_], the Sockeye script
+`UMI-tools <https://github.com/CGATOxford/UMI-tools>`_ package  [17_], the Sockeye script
 ``cluster_umis.py`` makes significant use of several functions from
 the package.
 
@@ -285,12 +284,11 @@ References
 .. [10] Li H., Handsaker B., Wysoker A., Fennell T., Ruan J., Homer N., Marth G., Abecasis G., Durbin R. and 1000 Genome Project Data Processing Subgroup (2009) The Sequence alignment/map (SAM) format and SAMtools. Bioinformatics, 25, 2078-9.
 .. [11] Li H., Handsaker B., Wysoker A., Fennell T., Ruan J., Homer N., Marth G., Abecasis G., Durbin R. and 1000 Genome Project Data Processing Subgroup (2009) The Sequence alignment/map (SAM) format and SAMtools. Bioinformatics, 25, 2078-9.
 .. [12] Pedregosa et al. Scikit-learn: Machine Learning in Python. JMLR 12, pp. 2825-2830, 2011.
-.. [13] Waskom, M. et al., 2017. mwaskom/seaborn: v0.8.1 (September 2017), Zenodo. Available at: https://doi.org/10.5281/zenodo.883859.
-.. [14] Shen, W., Le, S., Li, Y. & Hu, F. SeqKit: A Cross-Platform and Ultrafast Toolkit for FASTA/Q File Manipulation. PLoS One 11, e0163962, doi:10.1371/journal.pone.0163962 (2016).
-.. [15] https://github.com/tqdm/tqdm
-.. [16] McInnes, L, Healy, J, UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction, ArXiv e-prints 1802.03426, 2018.
-.. [17] Rognes T, Flouri T, Nichols B, Quince C, Mahé F. (2016) VSEARCH: a versatile open source tool for metagenomics. PeerJ 4:e2584. doi: 10.7717/peerj.2584
-.. [18] Smith T.S., Heger A., and Sudbery I. UMI-tools: Modelling sequencing errors in Unique Molecular Identifiers to improve quantification accuracy. Genome Res. 2017;27:491–9.
+.. [13] Shen, W., Le, S., Li, Y. & Hu, F. SeqKit: A Cross-Platform and Ultrafast Toolkit for FASTA/Q File Manipulation. PLoS One 11, e0163962, doi:10.1371/journal.pone.0163962 (2016).
+.. [14] https://github.com/tqdm/tqdm
+.. [15] McInnes, L, Healy, J, UMAP: Uniform Manifold Approximation and Projection for Dimension Reduction, ArXiv e-prints 1802.03426, 2018.
+.. [16] Rognes T, Flouri T, Nichols B, Quince C, Mahé F. (2016) VSEARCH: a versatile open source tool for metagenomics. PeerJ 4:e2584. doi: 10.7717/peerj.2584
+.. [17] Smith T.S., Heger A., and Sudbery I. UMI-tools: Modelling sequencing errors in Unique Molecular Identifiers to improve quantification accuracy. Genome Res. 2017;27:491–9.
 
 License and Copyright
 ---------------------
