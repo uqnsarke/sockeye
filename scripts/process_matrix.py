@@ -83,7 +83,9 @@ def init_logger(args):
 
 
 def filter_cells(df, args):
-    """ """
+    """
+    Remove cells that express fewer than N=<args.min_genes> unique genes.
+    """
     df = df.transpose()
     df["total"] = df.sum(axis=1)
 
@@ -106,6 +108,9 @@ def filter_cells(df, args):
     df = df.drop(["mito_total", "mito_pct"], axis=1)
     df = df.transpose()
 
+    if df.shape[1] == 0:
+        raise Exception("All cells have been filtered out!")
+
     return df
 
 
@@ -118,6 +123,9 @@ def filter_genes(df, args):
     logger.info(f"Dropping {n_dropped} genes observed in < {args.min_cells} cells")
     df = df[df["n_cells"] >= args.min_cells]
     df = df.drop(["n_cells"], axis=1)
+
+    if df.shape[0] == 0:
+        raise Exception("All genes have been filtered out!")
 
     return df
 

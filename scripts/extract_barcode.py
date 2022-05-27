@@ -75,7 +75,7 @@ def parse_args():
         "-T",
         "--polyT_length",
         help="Length of polyT sequence to use in the alignment query (ignored \
-        with --kit 5prime) [10]",
+        with --kit=5prime) [10]",
         type=int,
         default=10,
     )
@@ -177,13 +177,9 @@ def parse_args():
     if args.kit == "3prime":
         # Read1 adapter
         args.adapter1_seq = "CTACACGACGCTCTTCCGATCT"
-        # TSO adapter
-        args.adapter2_seq = "ATGTACTCTGCGTTGATACCACTGCTT"
     elif args.kit == "5prime":
         # Read1 adapter
         args.adapter1_seq = "CTACACGACGCTCTTCCGATCT"
-        # Poly-dT RT adapter
-        args.adapter2_seq = "GTACTCTGCGTTGATACCACTGCTT"
 
     # Create temp dir and add that to the args object
     p = pathlib.Path(args.output_bam)

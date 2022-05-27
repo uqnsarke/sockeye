@@ -78,20 +78,19 @@ def parse_args():
     )
 
     parser.add_argument(
-        "-r",
-        "--read1_adapter",
-        help="Read1 adapter sequence to use in the alignment query [CTACACGACGCTCTTCCGATCT]",
-        default="CTACACGACGCTCTTCCGATCT",
+        "--kit",
+        help="Specify either the 10X 3' (3prime) or 5' (5prime) gene expression \
+        kit [3prime]",
+        default="3prime",
         type=str,
     )
 
     parser.add_argument(
-        "--read1_suff_length",
-        help="Use this many suffix bases from read1 sequence \
-                        in the alignment query. For example, specifying 12 \
-                        would mean that the last 12 bases of the specified \
-                        read1 sequence will be included in the probe sequence \
-                        [10]",
+        "--adapter1_suff_length",
+        help="Use this many suffix bases from adapter1 sequence  in the \
+            alignment query. For example, specifying 12 would mean that the last \
+            12 bases of the specified read1 sequence will be included in the \
+            probe sequence [10]",
         default=10,
         type=int,
     )
@@ -99,7 +98,8 @@ def parse_args():
     parser.add_argument(
         "-T",
         "--polyT_length",
-        help="Length of polyT sequence to use in the alignment query [10]",
+        help="Length of polyT sequence to use in the alignment query (ignored \
+        with --kit=5prime) [10]",
         type=int,
         default=10,
     )
@@ -153,6 +153,21 @@ def parse_args():
 
     # Parse arguments
     args = parser.parse_args()
+
+    # verify kit selection
+    if (args.kit != "3prime") and (args.kit != "5prime"):
+        raise Exception("Invalid kit name! Specify either 3prime or 5prime.")
+
+    if args.kit == "3prime":
+        # Read1 adapter
+        args.adapter1_seq = "CTACACGACGCTCTTCCGATCT"
+        # TSO adapter
+        args.adapter2_seq = "ATGTACTCTGCGTTGATACCACTGCTT"
+    elif args.kit == "5prime":
+        # Read1 adapter
+        args.adapter1_seq = "CTACACGACGCTCTTCCGATCT"
+        # Poly-dT RT adapter
+        args.adapter2_seq = "GTACTCTGCGTTGATACCACTGCTT"
 
     # Create temp dir and add that to the args object
     p = pathlib.Path(args.output_bam)
@@ -343,7 +358,7 @@ def parse_probe_alignment(p_alignment, align, prefix_seq, prefix_qv):
 
 def get_uncorrected_umi(align, args):
     """
-    Aligns a probe sequence containing the read1+corrected_barcode+Ns+polyT to
+    Aligns a probe sequence containing the adapter1+corrected_barcode+Ns+polyT to
     the read. Bases aligning to the Ns in the probe sequence correspond to the
     UMI positions. Extract those bases and consider those to be the uncorrected
     UMI sequence.
@@ -358,15 +373,27 @@ def get_uncorrected_umi(align, args):
     prefix_seq = align.get_forward_sequence()[: args.window]
     prefix_qv = align.get_forward_qualities()[: args.window]
 
-    # Use only the specified suffix length of the read1 adapter
-    read1_probe_seq = args.read1_adapter[-args.read1_suff_length :]
-    # Compile the actual query sequence of <read1_suffix><bc_corr>NNN...N<TTTTT....>
-    probe_seq = "{r}{bc}{umi}{pT}".format(
-        r=read1_probe_seq,
-        bc=align.get_tag("CB"),
-        umi="N" * args.umi_length,
-        pT="T" * args.polyT_length,
-    )
+    # Use only the specified suffix length of adapter1
+    adapter1_probe_seq = args.adapter1_seq[-args.adapter1_suff_length :]
+
+    if args.kit == "3prime":
+        # Compile the actual query sequence of <adapter1_suffix><bc_corr>NNN...N<TTTTT....>
+        probe_seq = "{r}{bc}{umi}{pT}".format(
+            r=adapter1_probe_seq,
+            bc=align.get_tag("CB"),
+            umi="N" * args.umi_length,
+            pT="T" * args.polyT_length,
+        )
+    elif args.kit == "5prime":
+        # Compile the actual probe sequence of <adapter1_suffix>NNN...NNN<TTTCTTATATGGG>
+        probe_seq = "{a1}{bc}{umi}{tso}".format(
+            a1=adapter1_probe_seq,
+            bc=align.get_tag("CB"),
+            umi="N" * args.umi_length,
+            tso="TTTCTTATATGGG",
+        )
+    else:
+        raise Exception("Invalid kit name! Specify either 3prime or 5prime.")
 
     matrix = update_matrix(args)
     parasail_alg = parasail.sw_trace
@@ -378,6 +405,11 @@ def get_uncorrected_umi(align, args):
         extend=args.gap_extend,
         matrix=matrix,
     )
+
+    # print(p_alignment.traceback.ref)
+    # print(p_alignment.traceback.comp)
+    # print(p_alignment.traceback.query)
+    # print()
 
     align = parse_probe_alignment(p_alignment, align, prefix_seq, prefix_qv)
 
