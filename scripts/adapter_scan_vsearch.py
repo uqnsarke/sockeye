@@ -60,20 +60,13 @@ def parse_args():
     )
 
     parser.add_argument(
-        "-r1",
-        "--read1",
-        help="Read1 adapter sequence \
-                        [CTACACGACGCTCTTCCGATCT]",
+        "-k",
+        "--kit",
+        help="Specify either the 10X 3' (3prime) or 5' (5prime) gene expression \
+        kit. This determines which adapter sequences to search for in the reads \
+        [3prime]",
+        default="3prime",
         type=str,
-        default="CTACACGACGCTCTTCCGATCT",
-    )
-
-    parser.add_argument(
-        "-s",
-        "--TSO",
-        help="TSO sequence [ATGTACTCTGCGTTGATACCACTGCTT]",
-        type=str,
-        default="ATGTACTCTGCGTTGATACCACTGCTT",
     )
 
     parser.add_argument(
@@ -88,8 +81,7 @@ def parse_args():
     parser.add_argument(
         "--only_strand_full_length",
         help="Do not try to strand-orient reads where either \
-                        just a single read1 or single TSO adapter was found \
-                        [False]",
+                        just a single adapter was found [False]",
         action="store_true",
         default=False,
     )
@@ -98,9 +90,9 @@ def parse_args():
         "-a",
         "--adapters_fasta",
         help="Filename for adapter query sequences \
-                        [read1_TSO.fasta]",
+                        [adapter_seqs.fasta]",
         type=str,
-        default="read1_TSO.fasta",
+        default="adapter_seqs.fasta",
     )
 
     parser.add_argument(
@@ -112,6 +104,21 @@ def parse_args():
 
     # Parse arguments
     args = parser.parse_args()
+
+    # verify kit selection
+    if (args.kit != "3prime") and (args.kit != "5prime"):
+        raise Exception("Invalid kit name! Specify either 3prime or 5prime.")
+
+    if args.kit == "3prime":
+        # Read1 adapter
+        args.adapter1_seq = "CTACACGACGCTCTTCCGATCT"
+        # TSO adapter
+        args.adapter2_seq = "ATGTACTCTGCGTTGATACCACTGCTT"
+    elif args.kit == "5prime":
+        # Read1 adapter
+        args.adapter1_seq = "CTACACGACGCTCTTCCGATCT"
+        # Poly-dT RT adapter
+        args.adapter2_seq = "GTACTCTGCGTTGATACCACTGCTT"
 
     # Create temp dir and add that to the args object
     p = pathlib.Path(args.output_tsv)
@@ -149,10 +156,10 @@ def check_vsearch():
 def write_adapters_fasta(args):
     adapters = []
     for adapter, seq in {
-        "read1_f": args.read1,
-        "read1_r": args.read1[::-1].translate(COMPLEMENT_TRANS),
-        "TSO_f": args.TSO,
-        "TSO_r": args.TSO[::-1].translate(COMPLEMENT_TRANS),
+        "adapter1_f": args.adapter1_seq,
+        "adapter1_r": args.adapter1_seq[::-1].translate(COMPLEMENT_TRANS),
+        "adapter2_f": args.adapter2_seq,
+        "adapter2_r": args.adapter2_seq[::-1].translate(COMPLEMENT_TRANS),
     }.items():
         entry = SeqRecord(Seq(seq), id=adapter, name="", description="")
 
@@ -217,23 +224,23 @@ def get_valid_adapter_pair_positions_in_read(read):
         }
         return fl_pair, valid_pairs_n
 
-    compat_adapters = {"read1_f": "TSO_f", "TSO_r": "read1_r"}
+    compat_adapters = {"adapter1_f": "adapter2_f", "adapter2_r": "adapter1_r"}
 
-    # First find all instances of read1_f
-    for adapter1 in ["read1_f", "TSO_r"]:
+    # First find all instances of adapter1_f
+    for adapter1 in ["adapter1_f", "adapter2_r"]:
         adapter_1_idxs = read.index[read["target"] == adapter1]
         for adapter_1_idx in adapter_1_idxs:
-            # For each found read1_f, examine next found adapter
+            # For each found adapter1_f, examine next found adapter
             adapter_2_idx = adapter_1_idx + 1
             # Make sure there are enough alignments to allow this indexing
             if adapter_2_idx < read.shape[0]:
-                # Is the next found adapter a TSO_f?
+                # Is the next found adapter a adapter2_f?
                 if read.iloc[adapter_2_idx]["target"] == compat_adapters[adapter1]:
-                    # This is a valid adapter pairing (read1_f-TSO_f)
+                    # This is a valid adapter pairing (adapter1_f-adapter2_f)
                     fl_pair, valid_pairs_n = write_valid_pair_dict(
                         read, adapter_1_idx, adapter_2_idx, valid_pairs_n
                     )
-                    if adapter1 == "read1_f":
+                    if adapter1 == "adapter1_f":
                         fl_pair["strand"] = "+"
                     else:
                         fl_pair["strand"] = "-"
@@ -301,9 +308,9 @@ def parse_vsearch(tmp_vsearch, args):
         read_info[orig_read_id] = {}
 
         # Look for reads with valid consecutive features.
-        # For example, a read1_f followed immediately by
-        # a TSO_f, or a TSO_r followed immediately by
-        # a read1_r.
+        # For example, a adapter1_f followed immediately by
+        # a adapter2_f, or a adapter2_r followed immediately by
+        # a adapter1_r.
         fl_pairs = get_valid_adapter_pair_positions_in_read(read)
         if len(fl_pairs) > 0:
             for fl_pair in fl_pairs:
@@ -341,49 +348,49 @@ def parse_vsearch(tmp_vsearch, args):
             start = 0
             end = readlen - 1
             adapter_config = "-".join(list(read["target"].values))
-            if adapter_config in ["TSO_r-TSO_f", "TSO_f-TSO_r"]:
-                lab = "double_tso"
-            elif adapter_config in ["read1_r-read1_f", "read1_f-read1_r"]:
-                lab = "double_read1"
-            elif adapter_config in ["TSO_f", "TSO_r"]:
-                lab = "single_tso"
+            if adapter_config in ["adapter2_r-adapter2_f", "adapter2_f-adapter2_r"]:
+                lab = "double_adapter2"
+            elif adapter_config in ["adapter1_r-adapter1_f", "adapter1_f-adapter1_r"]:
+                lab = "double_adapter1"
+            elif adapter_config in ["adapter2_f", "adapter2_r"]:
+                lab = "single_adapter2"
                 if not args.only_strand_full_length:
                     # We want to strand and trim reads where we only have
-                    # a TSO sequence but no read1. These MIGHT contain
-                    # the cell barcode, UMI, polyT and cDNA sequence, but
-                    # since the read1 is low-quality, these might be of
-                    # of dubious value. We can only trim the TSO end of the
-                    # read based on TSO aligned positions, but won't touch
-                    # the putative read1 end.
+                    # an adapter2 sequence but no adapter1. These MIGHT contain
+                    # the cell barcode, UMI, polyT (for --kit 3prime) and cDNA
+                    # sequence, but since the adapter1 is low-quality, these
+                    # might be of of dubious value. We can only trim the
+                    # adapter2 end of the read based on adapter2 aligned
+                    # positions, but won't touch the putative adapter1 end.
                     stranded = True
-                    if adapter_config == "TSO_f":
+                    if adapter_config == "adapter2_f":
                         strand = "+"
                         start = 0
                         end = read.iloc[0]["qihi"]
                         readlen = end - start
-                    elif adapter_config == "TSO_r":
+                    elif adapter_config == "adapter2_r":
                         strand = "-"
                         start = read.iloc[0]["qilo"]
                         end = read.iloc[0]["ql"] - 1
                         readlen = end - start
                     else:
                         raise Exception("Shouldn't be here!")
-            elif adapter_config in ["read1_f", "read1_r"]:
-                lab = "single_read1"
+            elif adapter_config in ["adapter1_f", "adapter1_r"]:
+                lab = "single_adapter1"
                 if not args.only_strand_full_length:
                     # We want to strand and trim reads where we only have
-                    # a read1 sequence but no TSO. These should contain
-                    # the cell barcode, UMI, polyT and cDNA sequence, so
-                    # should still have significant value. We can only trim
-                    # the read1 end of the read, but won't touch the putative
-                    # TSO end.
+                    # a adapter1 sequence but no adapter2. These should contain
+                    # the cell barcode, UMI, polyT (if --kit 3prime) and cDNA
+                    # sequence, so should still have significant value. We can
+                    # only trim the adapter1 end of the read, but won't touch
+                    # the putative adapter2 end.
                     stranded = True
-                    if adapter_config == "read1_f":
+                    if adapter_config == "adapter1_f":
                         strand = "+"
                         start = read.iloc[0]["qilo"]
                         end = read.iloc[0]["ql"] - 1
                         readlen = end - start
-                    elif adapter_config == "read1_r":
+                    elif adapter_config == "adapter1_r":
                         strand = "-"
                         start = 0
                         end = read.iloc[0]["qihi"]
@@ -413,13 +420,12 @@ def parse_vsearch(tmp_vsearch, args):
 
 def revcomp_adapter_config(adapters_string):
     d = {
-        "read1_f": "read1_r",
-        "read1_r": "read1_f",
-        "TSO_f": "TSO_r",
-        "TSO_r": "TSO_f",
+        "adapter1_f": "adapter1_r",
+        "adapter1_r": "adapter1_f",
+        "adapter2_f": "adapter2_r",
+        "adapter2_r": "adapter2_f",
     }
 
-    "TSO_r-read1_r"
     rc_string = "-".join([d[a] for a in adapters_string.split("-")[::-1]])
     return rc_string
 

@@ -39,10 +39,13 @@ def parse_args():
 
     parser.add_argument(
         "superlist",
-        help="Comprehensive whitelist of all possible cell barcodes. For example, \
-        the file 3M-february-2018.txt.gz can be downloaded at https://github.com/\
-        10XGenomics/cellranger/blob/master/lib/python/cellranger/barcodes/translation\
-        /3M-february-2018.txt.gz",
+        help="Comprehensive whitelist of all possible cell barcodes. For the 3' \
+        gene expression kit, the file 3M-february-2018.txt.gz can be downloaded \
+        at https://github.com/10XGenomics/cellranger/blob/master/lib/python/\
+        cellranger/barcodes/translation/3M-february-2018.txt.gz, while for the 5' \
+        gene expression kit the file 737K-august-2016.txt can be downloaded from \
+        https://github.com/10XGenomics/cellranger/blob/master/lib/python/\
+        cellranger/barcodes/737K-august-2016.txt",
         type=str,
         default=None,
     )
@@ -58,17 +61,8 @@ def parse_args():
     )
 
     parser.add_argument(
-        "-r",
-        "--read1_adapter",
-        help="Read1 adapter sequence to use in the alignment query \
-            [CTACACGACGCTCTTCCGATCT]",
-        default="CTACACGACGCTCTTCCGATCT",
-        type=str,
-    )
-
-    parser.add_argument(
-        "--read1_suff_length",
-        help="Use this many suffix bases from read1 sequence \
+        "--adapter1_suff_length",
+        help="Use this many suffix bases from adapter1 sequence \
             in the alignment query. For example, specifying 12 \
             would mean that the last 12 bases of the specified \
             read1 sequence will be included in the probe sequence \
@@ -143,8 +137,8 @@ def parse_args():
     )
 
     parser.add_argument(
-        "--max_read1_ed",
-        help="Max edit distance with read1 adapter sequence (upstream of cell \
+        "--max_adapter1_ed",
+        help="Max edit distance with the adapter1 sequence (upstream of cell \
         barcode) [3]",
         type=int,
         default=3,
@@ -179,6 +173,17 @@ def parse_args():
     # verify kit selection
     if (args.kit != "3prime") and (args.kit != "5prime"):
         raise Exception("Invalid kit name! Specify either 3prime or 5prime.")
+
+    if args.kit == "3prime":
+        # Read1 adapter
+        args.adapter1_seq = "CTACACGACGCTCTTCCGATCT"
+        # TSO adapter
+        args.adapter2_seq = "ATGTACTCTGCGTTGATACCACTGCTT"
+    elif args.kit == "5prime":
+        # Read1 adapter
+        args.adapter1_seq = "CTACACGACGCTCTTCCGATCT"
+        # Poly-dT RT adapter
+        args.adapter2_seq = "GTACTCTGCGTTGATACCACTGCTT"
 
     # Create temp dir and add that to the args object
     p = pathlib.Path(args.output_bam)
@@ -294,7 +299,7 @@ def edit_distance(query, target):
     return d
 
 
-def parse_probe_alignment(p_alignment, read1_probe_seq, args):
+def parse_probe_alignment(p_alignment, adapter1_probe_seq, args):
     """ """
     # Find the position of the Ns in the alignment. These correspond
     # to the cell barcode + UMI sequences bound by the read1 and polyT
@@ -304,8 +309,8 @@ def parse_probe_alignment(p_alignment, read1_probe_seq, args):
         bc_start = min(idxs)
 
         # The read1 adapter comprises the first part of the alignment
-        read1 = p_alignment.traceback.query[0:bc_start]
-        read1_ed = edit_distance(read1, read1_probe_seq)
+        adapter1 = p_alignment.traceback.query[0:bc_start]
+        adapter1_ed = edit_distance(adapter1, adapter1_probe_seq)
 
         # The barcode + UMI sequences in the read correspond to the
         # positions of the aligned Ns in the probe sequence
@@ -314,11 +319,11 @@ def parse_probe_alignment(p_alignment, read1_probe_seq, args):
         ]
     else:
         # No Ns in the probe successfully aligned -- we will ignore this read
-        read1_ed = len(read1_probe_seq)
+        adapter1_ed = len(adapter1_probe_seq)
         barcode = ""
         bc_start = 0
 
-    return read1_ed, barcode, bc_start
+    return adapter1_ed, barcode, bc_start
 
 
 LOOKUP = []
@@ -396,21 +401,21 @@ def align_adapter(tup):
     matrix = update_matrix(args)
     parasail_alg = parasail.sw_trace
 
-    # Use only the specified suffix length of the read1 adapter
-    read1_probe_seq = args.read1_adapter[-args.read1_suff_length :]
+    # Use only the specified suffix length of adapter1
+    adapter1_probe_seq = args.adapter1_seq[-args.adapter1_suff_length :]
 
     if args.kit == "3prime":
-        # Compile the actual probe sequence of <read1_suffix>NNN...NNN<TTTTT....>
-        probe_seq = "{r}{bc}{umi}{pT}".format(
-            r=read1_probe_seq,
+        # Compile the actual probe sequence of <adapter1_suffix>NNN...NNN<TTTTT....>
+        probe_seq = "{a1}{bc}{umi}{pT}".format(
+            a1=adapter1_probe_seq,
             bc="N" * args.barcode_length,
             umi="N" * args.umi_length,
             pT="T" * args.polyT_length,
         )
     elif args.kit == "5prime":
-        # Compile the actual probe sequence of <read1_suffix>NNN...NNN<TTTCTTATATGGG>
-        probe_seq = "{r}{bc}{umi}{tso}".format(
-            r=read1_probe_seq,
+        # Compile the actual probe sequence of <adapter1_suffix>NNN...NNN<TTTCTTATATGGG>
+        probe_seq = "{a1}{bc}{umi}{tso}".format(
+            a1=adapter1_probe_seq,
             bc="N" * args.barcode_length,
             umi="N" * args.umi_length,
             tso="TTTCTTATATGGG",
@@ -442,12 +447,12 @@ def align_adapter(tup):
             matrix=matrix,
         )
 
-        read1_ed, barcode, bc_start = parse_probe_alignment(
-            p_alignment, read1_probe_seq, args
+        adapter1_ed, barcode, bc_start = parse_probe_alignment(
+            p_alignment, adapter1_probe_seq, args
         )
 
         # Require minimum read1 edit distance
-        if read1_ed <= args.max_read1_ed:
+        if adapter1_ed <= args.max_adapter1_ed:
             qscores = find_feature_qscores(barcode, p_alignment, prefix_seq, prefix_qv)
             bc_qv = compute_mean_qscore(qscores)
             chrom_barcode_counts[barcode] += 1

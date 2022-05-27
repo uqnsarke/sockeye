@@ -31,7 +31,6 @@ SCRIPT_DIR = srcdir("scripts")
 # Validate config.yml #
 #######################
 if not config.get("SAMPLE_SHEET"):
-    print(config_path)
     raise Exception(f"Please define SAMPLE_SHEET in the {config_path}")
 elif not os.path.exists(config["SAMPLE_SHEET"]):
     raise Exception(f"Path specified for SAMPLE_SHEET in {config_path} not found!")

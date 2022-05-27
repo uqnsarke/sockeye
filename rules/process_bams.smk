@@ -6,8 +6,8 @@ rule extract_barcodes:
         tsv=BARCODE_COUNTS,
     params:
         barcodes=config["BC_SUPERLIST"],
-        read1=config["READ_STRUCTURE_READ1"],
-        read1_suff_length=config["BARCODE_READ1_SUFF_LENGTH"],
+        kit=lambda w: sample_sheet.loc[w.run_id, "kit"],
+        adapter1_suff_length=config["BARCODE_ADAPTER1_SUFF_LENGTH"],
         barcode_length=config["READ_STRUCTURE_BARCODE_LENGTH"],
         umi_length=config["READ_STRUCTURE_UMI_LENGTH"],
     threads: config["MAX_THREADS"]
@@ -16,8 +16,8 @@ rule extract_barcodes:
     shell:
         "python {SCRIPT_DIR}/extract_barcode.py "
         "-t {threads} "
-        "--read1_adapter {params.read1} "
-        "--read1_suff_length {params.read1_suff_length} "
+        "--kit {params.kit} "
+        "--adapter1_suff_length {params.adapter1_suff_length} "
         "--barcode_length {params.barcode_length} "
         "--umi_length {params.umi_length} "
         "--output_bam {output.bam} "
@@ -84,8 +84,8 @@ rule assign_barcodes:
     params:
         max_ed=config["BARCODE_MAX_ED"],
         min_ed_diff=config["BARCODE_MIN_ED_DIFF"],
-        read1=config["READ_STRUCTURE_READ1"],
-        read1_suff_length=config["BARCODE_READ1_SUFF_LENGTH"],
+        kit=lambda w: sample_sheet.loc[w.run_id, "kit"],
+        adapter1_suff_length=config["BARCODE_ADAPTER1_SUFF_LENGTH"],
         barcode_length=config["READ_STRUCTURE_BARCODE_LENGTH"],
         umi_length=config["READ_STRUCTURE_UMI_LENGTH"],
     threads: 1
@@ -99,8 +99,8 @@ rule assign_barcodes:
         "--output_counts {output.counts} "
         "--max_ed {params.max_ed} "
         "--min_ed_diff {params.min_ed_diff} "
-        "--read1_adapter {params.read1} "
-        "--read1_suff_length {params.read1_suff_length} "
+        "--kit {params.kit} "
+        "--adapter1_suff_length {params.adapter1_suff_length} "
         "--barcode_length {params.barcode_length} "
         "--umi_length {params.umi_length} "
         "{input.bam} {input.whitelist} "
