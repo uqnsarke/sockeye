@@ -3,6 +3,7 @@ import os
 import sys
 import gzip
 import shutil
+import requests
 import pandas as pd
 from glob import glob
 from itertools import product
@@ -27,6 +28,38 @@ else:
 SCRIPT_DIR = srcdir("scripts")
 
 
+###############################################
+# Download 10X barcode longlists if necessary #
+###############################################
+urls = {
+    "3M-february-2018.txt.gz": "https://github.com/10XGenomics/cellranger/raw/master/lib/python/cellranger/barcodes/3M-february-2018.txt.gz",
+    "737K-august-2016.txt": "https://github.com/10XGenomics/cellranger/raw/master/lib/python/cellranger/barcodes/737K-august-2016.txt",
+}
+
+ll_dir = config["BC_LONGLIST_DIR"]
+
+if not os.path.exists(ll_dir):
+    os.mkdir(ll_dir)
+
+for fn in urls.keys():
+    local_fn = os.path.join(ll_dir, fn)
+
+    if not os.path.exists(local_fn):
+        print(f"Downloading {fn} to {ll_dir}")
+        with open(local_fn, "wb") as f:
+            chunkSize = 1024
+            r = requests.get(urls[fn], stream=True)
+            with open(local_fn, "wb") as f:
+                for chunk in r.iter_content(chunk_size=chunkSize):
+                    if chunk:  # filter out keep-alive new chunks
+                        f.write(chunk)
+
+############################
+# Validate kit_configs.csv #
+############################
+kit_df = pd.read_csv("./config/kit_configs.csv", sep=",", comment="#")
+
+
 #######################
 # Validate config.yml #
 #######################
@@ -39,17 +72,8 @@ sample_sheet = pd.read_csv(
 ).set_index("run_id", drop=True)
 RUN_IDS = sample_sheet.index
 
-if not config.get("BC_SUPERLIST"):
-    raise Exception(f"Please define BC_SUPERLIST in the {config_path}")
-elif not os.path.exists(config["BC_SUPERLIST"]):
-    raise Exception(f"Path specified for BC_SUPERLIST in {config_path} not found!")
-else:
-    if ".gz" in config.get("BC_SUPERLIST"):
-        # Extract the gzipped file and update config dict
-        with gzip.open(config.get("BC_SUPERLIST"), "rb") as f_in:
-            with open(config.get("BC_SUPERLIST").replace(".gz", ""), "wb") as f_out:
-                shutil.copyfileobj(f_in, f_out)
-        config["BC_SUPERLIST"] = config.get("BC_SUPERLIST").replace(".gz", "")
+if not config.get("BC_LONGLIST_DIR"):
+    raise Exception(f"Please define BC_LONGLIST_DIR in the {config_path}")
 
 if not config.get("REF_GENOME_DIR"):
     raise Exception(f"Please define REF_GENOME_DIR in the {config_path}")
@@ -61,6 +85,9 @@ REF_GENES_GTF = REF_GENOME_DIR / "genes/genes.gtf"
 
 PLOT_GENES = config.get("UMAP_PLOT_GENES", None).split(",")
 
+BC_LONGLIST_DIR = Path(config["BC_LONGLIST_DIR"])
+BC_LONGLIST_3PRIME = BC_LONGLIST_DIR / "3M-february-2018.txt.gz"
+BC_LONGLIST_5PRIME = BC_LONGLIST_DIR / "737K-august-2016.txt"
 
 ##### Set output location #####
 OUTPUT_BASE = pathlib.Path(config.get("OUTPUT_BASE", "./output"))

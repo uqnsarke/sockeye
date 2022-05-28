@@ -34,7 +34,7 @@ rule call_adapter_scan:
     threads: 1
     params:
         batch_size=config["READ_STRUCTURE_BATCH_SIZE"],
-        kit=lambda w: sample_sheet.loc[w.run_id, "kit"],
+        kit=lambda w: sample_sheet.loc[w.run_id, "kit_name"],
     conda:
         "../envs/stranding.yml"
     shell:
