@@ -1,28 +1,66 @@
+def get_barcode_longlist(w):
+    """
+    Get the appropriate cell barcode longlist based on the kit_name specified
+    for this run_id.
+    """
+    kit_name = sample_sheet.loc[w.run_id, "kit_name"]
+    if kit_name == "3prime":
+        ll = BC_LONGLIST_3PRIME
+    elif kit_name == "5prime":
+        ll = BC_LONGLIST_5PRIME
+    else:
+        raise Exception("Encountered an unexpected kit_name in samples.csv")
+    return ll
+
+
+def get_barcode_length(w):
+    """
+    Get barcode length based on the kit_name and kit_version specified for this run_id.
+    """
+    kit_name = sample_sheet.loc[w.run_id, "kit_name"]
+    kit_version = sample_sheet.loc[w.run_id, "kit_version"]
+    rows = (kit_df["kit_name"] == kit_name) & (kit_df["kit_version"] == kit_version)
+    return kit_df.loc[rows, "barcode_length"].values[0]
+
+
+def get_umi_length(w):
+    """
+    Get UMI length based on the kit_name and kit_version specified for this run_id.
+    """
+    kit_name = sample_sheet.loc[w.run_id, "kit_name"]
+    kit_version = sample_sheet.loc[w.run_id, "kit_version"]
+    rows = (kit_df["kit_name"] == kit_name) & (kit_df["kit_version"] == kit_version)
+    return kit_df.loc[rows, "umi_length"].values[0]
+
+
 rule extract_barcodes:
     input:
         bam=BAM_SORT,
+        barcodes=lambda w: get_barcode_longlist(w),
     output:
         bam=temp(BAM_BC_UNCORR_TMP),
         tsv=BARCODE_COUNTS,
     params:
-        barcodes=config["BC_SUPERLIST"],
-        read1=config["READ_STRUCTURE_READ1"],
-        read1_suff_length=config["BARCODE_READ1_SUFF_LENGTH"],
-        barcode_length=config["READ_STRUCTURE_BARCODE_LENGTH"],
-        umi_length=config["READ_STRUCTURE_UMI_LENGTH"],
+        # barcodes=config["BC_LONGLIST"],
+        kit=lambda w: sample_sheet.loc[w.run_id, "kit_name"],
+        adapter1_suff_length=config["BARCODE_ADAPTER1_SUFF_LENGTH"],
+        barcode_length=lambda w: get_barcode_length(w),
+        umi_length=lambda w: get_umi_length(w),
+        # barcode_length=config["READ_STRUCTURE_BARCODE_LENGTH"],
+        # umi_length=config["READ_STRUCTURE_UMI_LENGTH"],
     threads: config["MAX_THREADS"]
     conda:
         "../envs/barcodes.yml"
     shell:
         "python {SCRIPT_DIR}/extract_barcode.py "
         "-t {threads} "
-        "--read1_adapter {params.read1} "
-        "--read1_suff_length {params.read1_suff_length} "
+        "--kit {params.kit} "
+        "--adapter1_suff_length {params.adapter1_suff_length} "
         "--barcode_length {params.barcode_length} "
         "--umi_length {params.umi_length} "
         "--output_bam {output.bam} "
         "--output_barcodes {output.tsv} "
-        "{input.bam} {params.barcodes}"
+        "{input.bam} {input.barcodes}"
 
 
 rule cleanup_headers_1:
@@ -84,10 +122,12 @@ rule assign_barcodes:
     params:
         max_ed=config["BARCODE_MAX_ED"],
         min_ed_diff=config["BARCODE_MIN_ED_DIFF"],
-        read1=config["READ_STRUCTURE_READ1"],
-        read1_suff_length=config["BARCODE_READ1_SUFF_LENGTH"],
-        barcode_length=config["READ_STRUCTURE_BARCODE_LENGTH"],
-        umi_length=config["READ_STRUCTURE_UMI_LENGTH"],
+        kit=lambda w: sample_sheet.loc[w.run_id, "kit_name"],
+        adapter1_suff_length=config["BARCODE_ADAPTER1_SUFF_LENGTH"],
+        barcode_length=lambda w: get_barcode_length(w),
+        umi_length=lambda w: get_umi_length(w),
+        # barcode_length=config["READ_STRUCTURE_BARCODE_LENGTH"],
+        # umi_length=config["READ_STRUCTURE_UMI_LENGTH"],
     threads: 1
     conda:
         "../envs/barcodes.yml"
@@ -99,8 +139,8 @@ rule assign_barcodes:
         "--output_counts {output.counts} "
         "--max_ed {params.max_ed} "
         "--min_ed_diff {params.min_ed_diff} "
-        "--read1_adapter {params.read1} "
-        "--read1_suff_length {params.read1_suff_length} "
+        "--kit {params.kit} "
+        "--adapter1_suff_length {params.adapter1_suff_length} "
         "--barcode_length {params.barcode_length} "
         "--umi_length {params.umi_length} "
         "{input.bam} {input.whitelist} "

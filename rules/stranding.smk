@@ -1,6 +1,6 @@
 rule cp_batch_fastqs:
     input:
-        dir=lambda wildcards: sample_sheet.loc[wildcards.run_id],
+        dir=lambda wildcards: sample_sheet.loc[wildcards.run_id, "path"],
     output:
         fofn=FOFN,
     params:
@@ -34,11 +34,13 @@ rule call_adapter_scan:
     threads: 1
     params:
         batch_size=config["READ_STRUCTURE_BATCH_SIZE"],
+        kit=lambda w: sample_sheet.loc[w.run_id, "kit_name"],
     conda:
         "../envs/stranding.yml"
     shell:
         "python {SCRIPT_DIR}/adapter_scan_vsearch.py "
         "-t {threads} "
+        "--kit {params.kit} "
         "--output_fastq {output.fastq} "
         "--output_tsv {output.tsv} "
         "--batch_size {params.batch_size} "
