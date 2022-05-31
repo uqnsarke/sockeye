@@ -13,12 +13,13 @@ OUTPUT_BASE: /PATH/TO/DESIRED/OUTPUT/DIR
 
 ######### REF_GENOME_DIR #########
 # REF_GENOME_DIR refers the path to reference directory as downloaded from 10x,
-# e.g. PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
-REF_GENOME_DIR: PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
+# e.g. /PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
+REF_GENOME_DIR: /PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
 
-######### BC_SUPERLIST #########
-# Specify the path where the 10X cell barcode longlists will be downloaded
-# e.g. PATH/TO/10X/DOWNLOADS
+######### BC_LONGLISTS #########
+# Specify the path where the 10X cell barcode longlists will be downloaded. It's
+# good idea to use the location where you have downloaded the 10X reference
+# data, e.g. /PATH/TO/10X/DOWNLOADS/
 BC_LONGLIST_DIR: /PATH/TO/10X/DOWNLOADS/
 
 MAX_THREADS: 24
@@ -38,12 +39,12 @@ UMI_CELL_GENE_MAX_READS: 20000
 UMI_CLUSTER_MAX_THREADS: 8
 
 MATRIX_MIN_GENES: 25
-MATRIX_MIN_CELLS: 1
+MATRIX_MIN_CELLS: 3
 MATRIX_MAX_MITO: 20
 MATRIX_NORM_COUNT: 10000
 
 # Using a comma-separated list, specify which genes should be annotated in the
-# # UMAP plots (e.g. CD19,PAX5,XBP1)
+# UMAP plots (e.g. CD19,PAX5,XBP1)
 UMAP_PLOT_GENES: CD19,CD24,CD27,CD38,CD79A,CD79B,PAX5,XBP1
 
 # Set the maximum resources to devote to the minimap2 alignment step

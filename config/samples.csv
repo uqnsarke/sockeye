@@ -1,10 +1,4 @@
-run_id,path
-SS_A1,/mmfs1/data/active/projects/202105_genewiz/FASTQ/SS_A1.PAI09842.gupppy_unknown.fq.gz
-SS_A2,/mmfs1/data/active/projects/202105_genewiz/FASTQ/SS_A2.PAI11491.gupppy_unknown.fq.gz
-SS_A3,/mmfs1/data/active/projects/202105_genewiz/FASTQ/SS_A3.PAI09838.gupppy_unknown.fq.gz
-SS_B1,/mmfs1/data/active/projects/202105_genewiz/FASTQ/SS_B1.PAI09846.gupppy_unknown.fq.gz
-SS_B2,/mmfs1/data/active/projects/202105_genewiz/FASTQ/SS_B2.PAI10304.gupppy_unknown.fq.gz
-SS_B3,/mmfs1/data/active/projects/202105_genewiz/FASTQ/SS_B3.PAI10307.gupppy_unknown.fq.gz
-SS_C1,/mmfs1/data/active/projects/202105_genewiz/FASTQ/SS_C1.PAI11925.gupppy_unknown.fq.gz
-SS_C2,/mmfs1/data/active/projects/202105_genewiz/FASTQ/SS_C2.PAI11493.gupppy_unknown.fq.gz
-SS_C3,/mmfs1/data/active/projects/202105_genewiz/FASTQ/SS_C3.PAI09882.gupppy_unknown.fq.gz
+run_id,kit_name,kit_version,path
+run1,3prime,v3,/PATH/TO/ONT/INPUT/READS1.fq.gz
+run2,3prime,v3,/PATH/TO/ONT/INPUT/READS2.fq.gz
+run3,5prime,v1,/PATH/TO/ONT/INPUT/RUN3/
