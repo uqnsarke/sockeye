@@ -316,8 +316,9 @@ def find_feature_qscores(feature, p_alignment, prefix_seq, prefix_qv):
 
     # Use these start/end indices to locate the correspoding qscores in prefix_qv
     feature_qv = prefix_qv[prefix_seq_feature_start:prefix_seq_feature_end]
+    feature_qv_ascii = "".join(map(lambda x: chr(x + 33), feature_qv))
 
-    return feature_qv
+    return feature_qv_ascii
 
 
 def parse_probe_alignment(p_alignment, align, prefix_seq, prefix_qv):
@@ -339,7 +340,6 @@ def parse_probe_alignment(p_alignment, align, prefix_seq, prefix_qv):
         umi = p_alignment.traceback.query[min(idxs) : max(idxs) + 1]
 
         qscores = find_feature_qscores(umi, p_alignment, prefix_seq, prefix_qv)
-        umi_qv = compute_mean_qscore(qscores)
 
         # print(p_alignment.traceback.ref)
         # print(p_alignment.traceback.comp)
@@ -351,7 +351,7 @@ def parse_probe_alignment(p_alignment, align, prefix_seq, prefix_qv):
         # Uncorrected UMI = UR:Z
         align.set_tag("UR", umi, value_type="Z")
         # UMI quality score = UY:Z
-        align.set_tag("UY", "{:.2f}".format(umi_qv), value_type="Z")
+        align.set_tag("UY", qscores, value_type="Z")
 
     return align
 

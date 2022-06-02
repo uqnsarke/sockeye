@@ -373,8 +373,9 @@ def find_feature_qscores(feature, p_alignment, prefix_seq, prefix_qv):
 
     # Use these start/end indices to locate the correspoding qscores in prefix_qv
     feature_qv = prefix_qv[prefix_seq_feature_start:prefix_seq_feature_end]
+    feature_qv_ascii = "".join(map(lambda x: chr(x + 33), feature_qv))
 
-    return feature_qv
+    return feature_qv_ascii
 
 
 def align_adapter(tup):
@@ -450,7 +451,6 @@ def align_adapter(tup):
         # Require minimum read1 edit distance
         if adapter1_ed <= args.max_adapter1_ed:
             qscores = find_feature_qscores(barcode, p_alignment, prefix_seq, prefix_qv)
-            bc_qv = compute_mean_qscore(qscores)
             chrom_barcode_counts[barcode] += 1
 
             # Strip out insertions from alignment to get read barcode sequence
@@ -459,7 +459,7 @@ def align_adapter(tup):
             # Uncorrected cell barcode = CR:Z
             align.set_tag("CR", barcode, value_type="Z")
             # Cell barcode quality score = CY:Z
-            align.set_tag("CY", "{:.2f}".format(bc_qv), value_type="Z")
+            align.set_tag("CY", qscores, value_type="Z")
 
             # print(read_id)
             # print(p_alignment.traceback.ref)
