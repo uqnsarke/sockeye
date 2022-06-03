@@ -521,7 +521,7 @@ def get_subread_info(read_info):
 
 def write_tmp_table(tmp_fastq, subread_info):
     df = pd.DataFrame.from_records(subread_info)
-    tmp_table = tmp_fastq.replace(".fastq", ".info.tsv")
+    tmp_table = tmp_fastq.replace(".fastq.gz", ".info.tsv")
     df.to_csv(tmp_table, sep="\t", index=False)
     return tmp_table
 
