@@ -33,10 +33,10 @@ def parse_args():
     # Optional arguments
     parser.add_argument(
         "--output_fastq",
-        help="Output file name for stranded FASTQ entries \
-                        [stranded.fastq]",
+        help="Output file name for (gzipped) stranded FASTQ entries \
+                        [stranded.fastq.gz]",
         type=str,
-        default="stranded.fastq",
+        default="stranded.fastq.gz",
     )
 
     parser.add_argument(
@@ -432,12 +432,13 @@ def revcomp_adapter_config(adapters_string):
 
 def write_stranded_fastq(tmp_fastq, read_info, args):
     """ """
-    tmp_stranded_fastq = tmp_fastq.replace(".fastq", ".stranded.fastq")
+    tmp_stranded_fastq = tmp_fastq.replace(".fastq", ".stranded.fastq.gz")
 
     # Iterate through FASTQ reads and re-write them with proper stranding based
     # the results of the VSEARCH alignments.
     with pysam.FastxFile(tmp_fastq) as f_in:
-        with open(tmp_stranded_fastq, "w") as f_out:
+        # with open(tmp_stranded_fastq, "w") as f_out:
+        with gzip.open(tmp_stranded_fastq, "wb") as f_out:
             for entry in f_in:
                 read_id = entry.name.split(" ")[0]
                 if read_info.get(read_id):
@@ -452,10 +453,10 @@ def write_stranded_fastq(tmp_fastq, read_info, args):
                             d["adapter_config"] = rc_config
                             subread_seq = subread_seq[::-1].translate(COMPLEMENT_TRANS)
                             subread_quals = subread_quals[::-1]
-                        f_out.write(f"@{subread_id}\n")
-                        f_out.write(f"{subread_seq}\n")
-                        f_out.write("+\n")
-                        f_out.write(f"{subread_quals}\n")
+                        f_out.write(f"@{subread_id}\n".encode())
+                        f_out.write(f"{subread_seq}\n".encode())
+                        f_out.write(b"+\n")
+                        f_out.write(f"{subread_quals}\n".encode())
                 else:
                     # This read had no VSEARCH hits for adapter sequences, so we
                     # should omit this read from the stranded FASTQ output
@@ -520,7 +521,7 @@ def get_subread_info(read_info):
 
 def write_tmp_table(tmp_fastq, subread_info):
     df = pd.DataFrame.from_records(subread_info)
-    tmp_table = tmp_fastq.replace(".fastq", ".info.tsv")
+    tmp_table = tmp_fastq.replace(".fastq.gz", ".info.tsv")
     df.to_csv(tmp_table, sep="\t", index=False)
     return tmp_table
 

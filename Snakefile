@@ -104,7 +104,7 @@ ADAPTERS_DIR = OUTPUT_BASE / "{run_id}" / "adapters"
 READ_CONFIG_CHUNKED = str(ADAPTERS_DIR / "{batch_id}.configs.tsv")
 STRANDED_FQ_CHUNKED = str(ADAPTERS_DIR / "{batch_id}.stranded.fastq")
 READ_CONFIG = str(ADAPTERS_DIR / "configs.tsv")
-STRANDED_FQ = str(ADAPTERS_DIR / "reads.stranded.fastq")
+STRANDED_FQ = str(ADAPTERS_DIR / "reads.stranded.fastq.gz")
 CONFIG_STATS = str(ADAPTERS_DIR / "configs.stats.json")
 
 

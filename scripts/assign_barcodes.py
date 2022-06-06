@@ -260,6 +260,8 @@ def calc_ed_with_whitelist(bc_uncorr, whitelist):
             next_bc_match_ed = bc_match_ed
             bc_match_ed = d
             bc_match = wl_bc
+        elif d < next_bc_match_ed:
+            next_bc_match_ed = d
     next_match_diff = next_bc_match_ed - bc_match_ed
 
     return bc_match, bc_match_ed, next_match_diff
