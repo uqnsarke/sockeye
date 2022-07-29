@@ -62,8 +62,9 @@ def parse_args():
     parser.add_argument(
         "-k",
         "--kit",
-        help="Specify either the 10X 3' (3prime) or 5' (5prime) gene expression \
-        kit. This determines which adapter sequences to search for in the reads \
+        help="Specify either the 10X 3' gene expression kit (3prime), the 5' \
+        gene expression kit (5prime), or the multiome kit (multiome) This \
+        determines which adapter sequences to search for in the reads \
         [3prime]",
         default="3prime",
         type=str,
@@ -106,10 +107,13 @@ def parse_args():
     args = parser.parse_args()
 
     # verify kit selection
-    if (args.kit != "3prime") and (args.kit != "5prime"):
-        raise Exception("Invalid kit name! Specify either 3prime or 5prime.")
+    if (args.kit != "3prime") and (args.kit != "5prime") and (args.kit != "multiome"):
+        raise Exception(
+            "Invalid kit name! Specify either 3prime, 5prime or \
+        multiome."
+        )
 
-    if args.kit == "3prime":
+    if (args.kit == "3prime") or (args.kit == "multiome"):
         # Read1 adapter
         args.adapter1_seq = "CTACACGACGCTCTTCCGATCT"
         # TSO adapter

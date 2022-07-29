@@ -39,13 +39,11 @@ def parse_args():
 
     parser.add_argument(
         "superlist",
-        help="Comprehensive whitelist of all possible cell barcodes. For the 3' \
-        gene expression kit, the file 3M-february-2018.txt.gz can be downloaded \
-        at https://github.com/10XGenomics/cellranger/blob/master/lib/python/\
-        cellranger/barcodes/translation/3M-february-2018.txt.gz, while for the 5' \
-        gene expression kit the file 737K-august-2016.txt can be downloaded from \
-        https://github.com/10XGenomics/cellranger/blob/master/lib/python/\
-        cellranger/barcodes/737K-august-2016.txt",
+        help="Comprehensive whitelist of all possible cell barcodes. These vary \
+        depending on which 10X kit was used. For 3' single cell gene expression \
+        kit: data/3M-february-2018.txt.gz. For 5' single cell gene expression \
+        kit: data/737K-august-2016.txt. For single cell multiome (ATAC + GEX) \
+        kit: data/737K-arc-v1.txt.gz",
         type=str,
         default=None,
     )

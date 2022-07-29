@@ -8,6 +8,8 @@ def get_barcode_longlist(w):
         ll = BC_LONGLIST_3PRIME
     elif kit_name == "5prime":
         ll = BC_LONGLIST_5PRIME
+    elif kit_name == "multiome":
+        ll = BC_LONGLIST_MULTIOME
     else:
         raise Exception("Encountered an unexpected kit_name in samples.csv")
     return ll
