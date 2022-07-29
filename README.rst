@@ -13,6 +13,7 @@ and UMI sequences present in nanopore sequencing reads generated from single-cel
 
 - Chromium Single Cell `3ʹ gene expression <https://teichlab.github.io/scg_lib_structs/methods_html/10xChromium3.html>`_, versions 2 and 3
 - Chromium Single Cell `5ʹ gene expression <https://teichlab.github.io/scg_lib_structs/methods_html/10xChromium5.html>`_, version 1
+- Chromium Single Cell `Multiome (ATAC + GEX) <https://teichlab.github.io/scg_lib_structs/methods_html/10xChromium_multiome.html>`_, version 1
 
 Oxford Nanopore has developed a protocol for sequencing single-cell libraries from 10X, which can be found on the Nanopore Community `website <https://community.nanoporetech.com/docs/prepare/library_prep_protocols/single-cell-transcriptomics-10x/v/sst_v9148_v111_revb_12jan2022>`_.
 
@@ -104,10 +105,6 @@ or
 
 Once downloaded, specify the full path to the packaged reference directory (e.g. ``refdata-gex-GRCh38-2020-A``) in the ``config/config.yml`` file using the ``REF_GENOME_DIR`` variable.
 
-Specifying 10X cell barcode list directory
-^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
-
-In addition to the reference data, Sockeye will also download the lists of all possible 10x cell barcodes (a.k.a. the barcode "longlists") used in the 3' and 5' gene expression kits. These files will be automatically downloaded at runtime to the directory specified by the ``BC_LONGLIST_DIR`` variable in the ``config/config.yml`` file.  It is a good idea to use the same directory where the 10X reference data is located, so that all supporting data from 10X is consolidated in one location.
 
 Setting up the pipeline
 ^^^^^^^^^^^^^^^^^^^^^^
@@ -133,12 +130,6 @@ The pipeline configurations are described in the YAML file ``config/config.yml``
    # REF_GENOME_DIR refers the path to reference directory as downloaded from 10x,
    # e.g. /PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
    REF_GENOME_DIR: /PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
-
-   ######### BC_LONGLISTS #########
-   # Specify the path where the 10X cell barcode longlists will be downloaded. It's
-   # good idea to use the location where you have downloaded the 10X reference
-   # data, e.g. /PATH/TO/10X/DOWNLOADS/
-   BC_LONGLIST_DIR: /PATH/TO/10X/DOWNLOADS/
 
    MAX_THREADS: 4
 
@@ -175,7 +166,6 @@ Most of the parameters defined in the ``config/config.yml`` file can normally re
 
    OUTPUT_BASE     # Base directory where run_id-specific output folders will be written
    REF_GENOME_DIR  # Path to the downloaded 10X reference data
-   BC_LONGLIST_DIR # Path to download 10X cell barcode longlists
    MAX_THREADS     # Maximum number of threads to use for various steps in the pipeline
    UMAP_PLOT_GENES # Genes to annotate in UMAP plots
 
@@ -193,8 +183,9 @@ The ``config/samples.csv`` file might look as follows:
    run1,3prime,v3,/PATH/TO/ONT/INPUT/READS1.fq.gz
    run2,3prime,v3,/PATH/TO/ONT/INPUT/READS2.fq.gz
    run3,5prime,v1,/PATH/TO/ONT/INPUT/RUN3/
+   run4,multiome,v1,/PATH/TO/ONT/INPUT/RUN4/
 
-where ``run3`` points to an input directory containing one or more FASTQ files from a given sample, rather than pointing to a single FASTQ input file.
+where ``run3`` and ``run4`` each point to an input directory containing one or more FASTQ files from a given sample, rather than pointing to a single FASTQ input file.
 
 Launching Sockeye
 ^^^^^^^^^^^^^^^^^
@@ -224,6 +215,7 @@ The pipeline output will be written to a directory defined by ``OUTPUT_BASE`` in
    /PATH/TO/OUTPUT/BASE/DIRECTORY/run1
    /PATH/TO/OUTPUT/BASE/DIRECTORY/run2
    /PATH/TO/OUTPUT/BASE/DIRECTORY/run3
+   /PATH/TO/OUTPUT/BASE/DIRECTORY/run4
 
 Each run_id-specific output folder will contain the following subdirectories:
 

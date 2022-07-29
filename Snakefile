@@ -28,32 +28,6 @@ else:
 SCRIPT_DIR = srcdir("scripts")
 
 
-###############################################
-# Download 10X barcode longlists if necessary #
-###############################################
-urls = {
-    "3M-february-2018.txt.gz": "https://github.com/10XGenomics/cellranger/raw/master/lib/python/cellranger/barcodes/3M-february-2018.txt.gz",
-    "737K-august-2016.txt": "https://github.com/10XGenomics/cellranger/raw/master/lib/python/cellranger/barcodes/737K-august-2016.txt",
-}
-
-ll_dir = config["BC_LONGLIST_DIR"]
-
-if not os.path.exists(ll_dir):
-    os.mkdir(ll_dir)
-
-for fn in urls.keys():
-    local_fn = os.path.join(ll_dir, fn)
-
-    if not os.path.exists(local_fn):
-        print(f"Downloading {fn} to {ll_dir}")
-        with open(local_fn, "wb") as f:
-            chunkSize = 1024
-            r = requests.get(urls[fn], stream=True)
-            with open(local_fn, "wb") as f:
-                for chunk in r.iter_content(chunk_size=chunkSize):
-                    if chunk:  # filter out keep-alive new chunks
-                        f.write(chunk)
-
 ############################
 # Validate kit_configs.csv #
 ############################
@@ -72,9 +46,6 @@ sample_sheet = pd.read_csv(
 ).set_index("run_id", drop=True)
 RUN_IDS = sample_sheet.index
 
-if not config.get("BC_LONGLIST_DIR"):
-    raise Exception(f"Please define BC_LONGLIST_DIR in the {config_path}")
-
 if not config.get("REF_GENOME_DIR"):
     raise Exception(f"Please define REF_GENOME_DIR in the {config_path}")
 elif not os.path.exists(config["REF_GENOME_DIR"]):
@@ -85,9 +56,10 @@ REF_GENES_GTF = REF_GENOME_DIR / "genes/genes.gtf"
 
 PLOT_GENES = config.get("UMAP_PLOT_GENES", None).split(",")
 
-BC_LONGLIST_DIR = Path(config["BC_LONGLIST_DIR"])
+BC_LONGLIST_DIR = Path(srcdir("data"))
 BC_LONGLIST_3PRIME = BC_LONGLIST_DIR / "3M-february-2018.txt.gz"
-BC_LONGLIST_5PRIME = BC_LONGLIST_DIR / "737K-august-2016.txt"
+BC_LONGLIST_5PRIME = BC_LONGLIST_DIR / "737K-august-2016.txt.gz"
+BC_LONGLIST_MULTIOME = BC_LONGLIST_DIR / "737K-arc-v1.txt.gz"
 
 ##### Set output location #####
 OUTPUT_BASE = pathlib.Path(config.get("OUTPUT_BASE", "./output"))

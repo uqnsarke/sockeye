@@ -39,13 +39,11 @@ def parse_args():
 
     parser.add_argument(
         "superlist",
-        help="Comprehensive whitelist of all possible cell barcodes. For the 3' \
-        gene expression kit, the file 3M-february-2018.txt.gz can be downloaded \
-        at https://github.com/10XGenomics/cellranger/blob/master/lib/python/\
-        cellranger/barcodes/translation/3M-february-2018.txt.gz, while for the 5' \
-        gene expression kit the file 737K-august-2016.txt can be downloaded from \
-        https://github.com/10XGenomics/cellranger/blob/master/lib/python/\
-        cellranger/barcodes/737K-august-2016.txt",
+        help="Comprehensive whitelist of all possible cell barcodes. These vary \
+        depending on which 10X kit was used. For 3' single cell gene expression \
+        kit: data/3M-february-2018.txt.gz. For 5' single cell gene expression \
+        kit: data/737K-august-2016.txt. For single cell multiome (ATAC + GEX) \
+        kit: data/737K-arc-v1.txt.gz",
         type=str,
         default=None,
     )
@@ -54,8 +52,10 @@ def parse_args():
     parser.add_argument(
         "-k",
         "--kit",
-        help="Specify either the 10X 3' (3prime) or 5' (5prime) gene expression \
-        kit [3prime]",
+        help="Specify either the 10X 3' gene expression kit (3prime), the 5' \
+        gene expression kit (5prime), or the multiome kit (multiome) This \
+        determines which adapter sequences to search for in the reads \
+        [3prime]",
         default="3prime",
         type=str,
     )
@@ -171,10 +171,13 @@ def parse_args():
     args = parser.parse_args()
 
     # verify kit selection
-    if (args.kit != "3prime") and (args.kit != "5prime"):
-        raise Exception("Invalid kit name! Specify either 3prime or 5prime.")
+    if (args.kit != "3prime") and (args.kit != "5prime") and (args.kit != "multiome"):
+        raise Exception(
+            "Invalid kit name! Specify either 3prime, 5prime or \
+        multiome."
+        )
 
-    if args.kit == "3prime":
+    if (args.kit == "3prime") or (args.kit == "multiome"):
         # Read1 adapter
         args.adapter1_seq = "CTACACGACGCTCTTCCGATCT"
     elif args.kit == "5prime":
@@ -401,7 +404,7 @@ def align_adapter(tup):
     # Use only the specified suffix length of adapter1
     adapter1_probe_seq = args.adapter1_seq[-args.adapter1_suff_length :]
 
-    if args.kit == "3prime":
+    if (args.kit == "3prime") or (args.kit == "multiome"):
         # Compile the actual probe sequence of <adapter1_suffix>NNN...NNN<TTTTT....>
         probe_seq = "{a1}{bc}{umi}{pT}".format(
             a1=adapter1_probe_seq,

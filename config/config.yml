@@ -16,12 +16,6 @@ OUTPUT_BASE: /PATH/TO/DESIRED/OUTPUT/DIR
 # e.g. /PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
 REF_GENOME_DIR: /PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
 
-######### BC_LONGLISTS #########
-# Specify the path where the 10X cell barcode longlists will be downloaded. It's
-# good idea to use the location where you have downloaded the 10X reference
-# data, e.g. /PATH/TO/10X/DOWNLOADS/
-BC_LONGLIST_DIR: /PATH/TO/10X/DOWNLOADS/
-
 MAX_THREADS: 24
 
 READ_STRUCTURE_BATCH_SIZE: 40000
