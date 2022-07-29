@@ -78,7 +78,6 @@ def parse_args():
     )
 
     parser.add_argument(
-        "-k",
         "--kit",
         help="Specify either the 10X 3' gene expression kit (3prime), the 5' \
         gene expression kit (5prime), or the multiome kit (multiome) This \
