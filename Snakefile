@@ -54,7 +54,7 @@ REF_GENOME_DIR = pathlib.Path(config["REF_GENOME_DIR"])
 REF_GENOME_FASTA = REF_GENOME_DIR / "fasta/genome.fa"
 REF_GENES_GTF = REF_GENOME_DIR / "genes/genes.gtf"
 
-PLOT_GENES = config.get("UMAP_PLOT_GENES", None).split(",")
+PLOT_GENES = list(map(lambda x: x.upper(), config.get("UMAP_PLOT_GENES", None).split(",")))
 
 BC_LONGLIST_DIR = Path(srcdir("data"))
 BC_LONGLIST_3PRIME = BC_LONGLIST_DIR / "3M-february-2018.txt.gz"
