@@ -159,6 +159,7 @@ The pipeline configurations are described in the YAML file ``config/config.yml``
    # Set the maximum resources to devote to the minimap2 alignment step
    RESOURCES_MM2_MEM_GB: 50
    RESOURCES_MM2_MAX_THREADS: 4
+   RESOURCES_MM2_FLAGS: "-I 4G"
 
 Most of the parameters defined in the ``config/config.yml`` file can normally remain unchanged. However, certain fields require editing, such as:
 

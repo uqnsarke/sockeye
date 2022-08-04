@@ -34,6 +34,7 @@ rule align_to_ref:
         sort_bam_bai=BAM_SORT_BAI,
     params:
         ref=str(REF_GENOME_FASTA),
+        flags=config["RESOURCES_MM2_FLAGS"],
     threads: config["RESOURCES_MM2_MAX_THREADS"]
     resources:
         mem_gb=get_split_ont_align_mem_gb,
@@ -43,6 +44,7 @@ rule align_to_ref:
         "minimap2 -ax splice -uf --MD -t {threads} "
         "--junc-bed {input.bed} "
         "--secondary=no "
+        "{params.flags} "
         "{params.ref} {input.fastq} > "
         "{output.sam_tmp} && "
         "samtools view --no-PG {output.sam_tmp} "
