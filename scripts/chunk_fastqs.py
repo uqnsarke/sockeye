@@ -115,12 +115,12 @@ def batch_iterator(iterator, batch_size):
             yield batch
 
 
-def load_fofn(fn, fastq_ext='.fastq'):
+def load_fofn(fn, fastq_ext=['.fq', '.fastq']):
     """ """
     input_fastqs = []
     for line in open(fn, "r"):
         path = line.strip()
-        if fastq_ext in path:
+        if any(ext in path for ext in fastq_ext):
             input_fastqs.append(path)
     return input_fastqs
 
