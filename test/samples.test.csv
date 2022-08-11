@@ -1,0 +1,3 @@
+run_id,kit_name,kit_version,path
+test_5prime_5k,5prime,v1,test/5prime.5k.fastq.gz
+test_3prime_5k,3prime,v3,test/3prime.5k.fastq.gz
