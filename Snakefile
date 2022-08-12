@@ -31,7 +31,8 @@ SCRIPT_DIR = srcdir("scripts")
 ############################
 # Validate kit_configs.csv #
 ############################
-kit_df = pd.read_csv("./config/kit_configs.csv", sep=",", comment="#")
+kit_fn = config.get("KIT_CONFIGS")
+kit_df = pd.read_csv(kit_fn, sep=",", comment="#")
 
 
 #######################

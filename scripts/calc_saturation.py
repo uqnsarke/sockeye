@@ -111,7 +111,10 @@ def calc_umi_saturation(df):
     n_reads = df.shape[0]
     df["gene_bc_umi"] = df["gene"] + "_" + df["barcode"] + "_" + df["umi"]
     n_deduped_reads = df["gene_bc_umi"].nunique()
-    saturation = 1 - (n_deduped_reads / n_reads)
+    if n_reads ==0:
+        saturation = 0.0
+    else:
+        saturation = 1 - (n_deduped_reads / n_reads)
 
     return saturation
 
@@ -169,7 +172,7 @@ def downsample_reads(df):
             "umi_sat",
         ],
     )
-    return res
+    return res.fillna(0.0)
 
 
 def main(args):

@@ -113,7 +113,8 @@ The pipeline configurations are described in the YAML file ``config/config.yml``
 
 ::
 
-   SAMPLE_SHEET: "./config/samples.csv"
+   SAMPLE_SHEET: "config/samples.csv"
+   KIT_CONFIGS: "config/kit_configs.csv"
 
    OUTPUT_BASE: /PATH/TO/OUTPUT/BASE/DIRECTORY
 
@@ -128,8 +129,8 @@ The pipeline configurations are described in the YAML file ``config/config.yml``
 
    ######### REF_GENOME_DIR #########
    # REF_GENOME_DIR refers the path to reference directory as downloaded from 10x,
-   # e.g. /PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
-   REF_GENOME_DIR: /PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
+   # e.g. /FULL/PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
+   REF_GENOME_DIR: /FULL/PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
 
    MAX_THREADS: 4
 

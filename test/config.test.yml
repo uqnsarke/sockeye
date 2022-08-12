@@ -1,6 +1,7 @@
-SAMPLE_SHEET: "test/samples.test.csv"
+SAMPLE_SHEET: "samples.test.csv"
+KIT_CONFIGS: "../config/kit_configs.csv"
 
-OUTPUT_BASE: test/output
+OUTPUT_BASE: output
 
 ################################################################################
 # 10x SUPPORTING FILES                                                         #
@@ -13,8 +14,8 @@ OUTPUT_BASE: test/output
 
 ######### REF_GENOME_DIR #########
 # REF_GENOME_DIR refers the path to reference directory as downloaded from 10x,
-# e.g. PATH/TO/DOWNLOADED/refdata-gex-GRCh38-2020-A
-REF_GENOME_DIR: /mmfs1/data/active/shared/refgenome/10x_refs/refdata-gex-GRCh38-2020-A
+# e.g. /FULL/PATH/TO/DOWNLOADED/refdata-gex-GRCh38-2020-A
+REF_GENOME_DIR: refdata-gex-GRCh38-2020-A/ # do not change for test run
 
 MAX_THREADS: 24
 
