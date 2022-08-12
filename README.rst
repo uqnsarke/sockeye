@@ -79,6 +79,26 @@ that contains the necessary packages for calling the Snakemake pipeline:
    conda env create -f environment.yml
    conda activate sockeye
 
+Testing
+-------
+
+In order to test the installation, two small test input FASTQ files are bundled with the repository, as well as the requisite test reference data.
+
+* ``test/3prime.5k.fastq.gz``: 5,000 reads from a 10X 3' gene expression library 
+* ``test/5prime.5k.fastq.gz``: 5,000 reads from a 10X 5' gene expression library
+* ``test/refdata-gex-GRCh38-2020-A``: subset human reference containing only chromosomes 19 and M
+
+To execute a pipeline test run, activate the ``sockeye`` conda environment as described above and run the following:
+
+::
+
+   cd test
+   ./run_test.sh
+
+The pipeline will execute using two cores and should only take a few minutes to complete.
+
+> :warning: The reference data in ``test/refdata-gex-GRCh38-2020-A`` is a subset and is not intended for use outside of pipeline testing. See below for details on downloading the full reference data required for use with input data from real samples.
+
 Getting Started
 ---------------
 
