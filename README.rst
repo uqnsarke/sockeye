@@ -79,6 +79,26 @@ that contains the necessary packages for calling the Snakemake pipeline:
    conda env create -f environment.yml
    conda activate sockeye
 
+Testing
+-------
+
+In order to test the installation, two small test input FASTQ files are bundled with the repository, as well as the requisite test reference data.
+
+* ``test/3prime.5k.fastq.gz``: 5,000 reads from a 10X 3' gene expression library 
+* ``test/5prime.5k.fastq.gz``: 5,000 reads from a 10X 5' gene expression library
+* ``test/refdata-gex-GRCh38-2020-A``: subset human reference containing only chromosomes 19 and M
+
+To execute a pipeline test run, activate the ``sockeye`` conda environment as described above and run the following:
+
+::
+
+   cd test
+   ./run_test.sh
+
+The pipeline will execute using two cores and should only take a few minutes to complete.
+
+> :warning: The reference data in ``test/refdata-gex-GRCh38-2020-A`` is a subset and is not intended for use outside of pipeline testing. See below for details on downloading the full reference data required for use with input data from real samples.
+
 Getting Started
 ---------------
 
@@ -113,7 +133,8 @@ The pipeline configurations are described in the YAML file ``config/config.yml``
 
 ::
 
-   SAMPLE_SHEET: "./config/samples.csv"
+   SAMPLE_SHEET: "config/samples.csv"
+   KIT_CONFIGS: "config/kit_configs.csv"
 
    OUTPUT_BASE: /PATH/TO/OUTPUT/BASE/DIRECTORY
 
@@ -128,8 +149,8 @@ The pipeline configurations are described in the YAML file ``config/config.yml``
 
    ######### REF_GENOME_DIR #########
    # REF_GENOME_DIR refers the path to reference directory as downloaded from 10x,
-   # e.g. /PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
-   REF_GENOME_DIR: /PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
+   # e.g. /FULL/PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
+   REF_GENOME_DIR: /FULL/PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
 
    MAX_THREADS: 4
 
