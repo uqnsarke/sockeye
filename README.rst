@@ -82,10 +82,11 @@ that contains the necessary packages for calling the Snakemake pipeline:
 Testing
 -------
 
-In order to test the installation, two small test input FASTQ files are bundled with the repository, as well as the requisite test reference data.
+In order to test the installation, three small test input FASTQ files are bundled with the repository, as well as the requisite test reference data.
 
-* ``test/3prime.5k.fastq.gz``: 5,000 reads from a 10X 3' gene expression library 
+* ``test/3prime.5k.fastq.gz``: 5,000 reads from a 10X 3' gene expression library
 * ``test/5prime.5k.fastq.gz``: 5,000 reads from a 10X 5' gene expression library
+* ``test/multiome.5k.fastq.gz``: 5,000 reads from a 10X Multiome (ATAC + gene expression) library
 * ``test/refdata-gex-GRCh38-2020-A``: subset human reference containing only chromosomes 19 and M
 
 To execute a pipeline test run, activate the ``sockeye`` conda environment as described above and run the following:
