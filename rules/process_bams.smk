@@ -46,10 +46,9 @@ rule extract_barcodes:
         # barcodes=config["BC_LONGLIST"],
         kit=lambda w: sample_sheet.loc[w.run_id, "kit_name"],
         adapter1_suff_length=config["BARCODE_ADAPTER1_SUFF_LENGTH"],
+        barcode_min_qv=config["BARCODE_MIN_QUALITY"],
         barcode_length=lambda w: get_barcode_length(w),
         umi_length=lambda w: get_umi_length(w),
-        # barcode_length=config["READ_STRUCTURE_BARCODE_LENGTH"],
-        # umi_length=config["READ_STRUCTURE_UMI_LENGTH"],
     threads: config["MAX_THREADS"]
     conda:
         "../envs/barcodes.yml"
@@ -58,6 +57,7 @@ rule extract_barcodes:
         "-t {threads} "
         "--kit {params.kit} "
         "--adapter1_suff_length {params.adapter1_suff_length} "
+        "--min_barcode_qv {params.barcode_min_qv} "
         "--barcode_length {params.barcode_length} "
         "--umi_length {params.umi_length} "
         "--output_bam {output.bam} "

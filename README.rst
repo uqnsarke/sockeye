@@ -159,6 +159,7 @@ The pipeline configurations are described in the YAML file ``config/config.yml``
    READ_STRUCTURE_FLAGS: ""
 
    BARCODE_ADAPTER1_SUFF_LENGTH: 10
+   BARCODE_MIN_QUALITY: 15
    BARCODE_KNEEPLOT_FLAGS: ""
    BARCODE_MAX_ED: 2
    BARCODE_MIN_ED_DIFF: 2

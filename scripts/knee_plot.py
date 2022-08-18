@@ -328,7 +328,7 @@ def make_kneeplot(ont_bc, ilmn_bc, conserved_bc, args):
     write_ont_barcodes(cutoff_ont_bcs, args)
 
     ax1.vlines(idxOfBestPoint, ymin=1, ymax=ymax, linestyle="--", color="k")
-    ax1.set_title("Found {} cells using ONT barcodes".format(idxOfBestPoint))
+    ax1.set_title("Found {} cells using ONT barcodes".format(idxOfBestPoint + 1))
 
     if args.ilmn_barcodes is not None:
         pct_ilmn_in_ont = 100 * len(cutoff_ont_bcs & ilmn_bc) / len(ilmn_bc)
