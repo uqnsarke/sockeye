@@ -170,9 +170,9 @@ The pipeline configurations are described in the YAML file ``config/config.yml``
    UMI_CELL_GENE_MAX_READS: 20000
    UMI_CLUSTER_MAX_THREADS: 4
 
-   MATRIX_MIN_GENES: 100
+   MATRIX_MIN_GENES: 200
    MATRIX_MIN_CELLS: 3
-   MATRIX_MAX_MITO: 5
+   MATRIX_MAX_MITO: 20
    MATRIX_NORM_COUNT: 10000
 
    # Using a comma-separated list, specify which genes should be annotated in the
