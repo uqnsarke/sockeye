@@ -137,6 +137,7 @@ CELL_UMI_GENE_TSV = str(DEMUX_DIR / "cell_umi_gene.tsv")
 ###################
 MATRIX_DIR = OUTPUT_BASE / "{run_id}" / "matrix"
 MATRIX_COUNTS_TSV = str(MATRIX_DIR / "gene_expression.counts.tsv")
+MATRIX_MITO_TSV = str(MATRIX_DIR / "gene_expression.mito.tsv")
 MATRIX_PROCESSED_TSV = str(MATRIX_DIR / "gene_expression.processed.tsv")
 MATRIX_UMAP_TSV = str(MATRIX_DIR / "gene_expression.umap.tsv")
 MATRIX_UMAP_PLOT_GENE = str(MATRIX_DIR / "umap.gene.{plot_gene}.png")

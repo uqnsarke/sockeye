@@ -170,9 +170,9 @@ The pipeline configurations are described in the YAML file ``config/config.yml``
    UMI_CELL_GENE_MAX_READS: 20000
    UMI_CLUSTER_MAX_THREADS: 4
 
-   MATRIX_MIN_GENES: 100
+   MATRIX_MIN_GENES: 200
    MATRIX_MIN_CELLS: 3
-   MATRIX_MAX_MITO: 5
+   MATRIX_MAX_MITO: 20
    MATRIX_NORM_COUNT: 10000
 
    # Using a comma-separated list, specify which genes should be annotated in the
@@ -195,7 +195,7 @@ Most of the parameters defined in the ``config/config.yml`` file can normally re
 
 Editing the sample sheet
 ^^^^^^^^^^^^
-The path to the sample sheet is defined by the ``SAMPLE_SHEET`` variable in the ``config.yml`` file described above (set to ``./config/samples.csv`` by default). This sample sheet contains details about the input run IDs, the 10X kits used (e.g. ``3prime`` or ``5prime``), the kit versions used (``v2`` or ``v3`` for the 3' kit, ``v1`` for the 5' kit), and the path to the ONT input reads. Sockeye can launch analyses of multiple runs simultaneously, which is especially useful when submitting the analyses to a compute cluster.
+The path to the sample sheet is defined by the ``SAMPLE_SHEET`` variable in the ``config.yml`` file described above (set to ``./config/samples.csv`` by default). This sample sheet contains details about the input run IDs, the 10X kits used (e.g. ``3prime`` or ``5prime``), the kit versions used (``v2`` or ``v3`` for the 3' kit, ``v1`` for the 5' kit), a rough estimate of the number of cells in the library, and the path to the ONT input reads. The cell count estimate specified in the ``exp_cells`` field can be a very rough estimate (500 is a robust default value if the number is not known). Sockeye can launch analyses of multiple runs simultaneously, which is especially useful when submitting the analyses to a compute cluster.
 
 The ONT input reads specified in the sample sheet can be either a directory path (where all FASTQ files in the directory will be combined as the input) or an explicit path to a single FASTQ file. The supported FASTQ extensions are ``*.fastq``, ``*.fq``, ``*.fastq.gz`` or ``*.fq.gz``. If a directory path is supplied, all file extensions within the directory must be the same -- mixtures of different file extensions within an input directory are not supported.
 
@@ -203,11 +203,11 @@ The ``config/samples.csv`` file might look as follows:
 
 ::
 
-   run_id,kit_name,kit_version,path
-   run1,3prime,v3,/PATH/TO/ONT/INPUT/READS1.fq.gz
-   run2,3prime,v3,/PATH/TO/ONT/INPUT/READS2.fq.gz
-   run3,5prime,v1,/PATH/TO/ONT/INPUT/RUN3/
-   run4,multiome,v1,/PATH/TO/ONT/INPUT/RUN4/
+   run_id,kit_name,kit_version,exp_cells,path
+   run1,3prime,v3,500,/PATH/TO/ONT/INPUT/READS1.fq.gz
+   run2,3prime,v3,500,/PATH/TO/ONT/INPUT/READS2.fq.gz
+   run3,5prime,v1,500,/PATH/TO/ONT/INPUT/RUN3/
+   run4,multiome,v1,500,/PATH/TO/ONT/INPUT/RUN4/
 
 where ``run3`` and ``run4`` each point to an input directory containing one or more FASTQ files from a given sample, rather than pointing to a single FASTQ input file.
 
