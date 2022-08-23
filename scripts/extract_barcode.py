@@ -61,6 +61,14 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--min_barcode_qv",
+        help="Minimum quality score in a barcode for it to be considered \
+        a high-quality barcode to be used in whitelist creation [15].",
+        default=15,
+        type=int,
+    )
+
+    parser.add_argument(
         "--adapter1_suff_length",
         help="Use this many suffix bases from adapter1 sequence \
             in the alignment query. For example, specifying 12 \
@@ -325,31 +333,6 @@ def parse_probe_alignment(p_alignment, adapter1_probe_seq, args):
     return adapter1_ed, barcode, bc_start
 
 
-LOOKUP = []
-
-for q in range(100):
-    LOOKUP.append(pow(10, -0.1 * q))
-
-
-def compute_mean_qscore(scores):
-    """
-    Returns the phred score corresponding to the mean of the probabilities
-    associated with the phred scores provided.
-
-    :param scores: Iterable of phred scores.
-    :returns: Phred score corresponding to the average error rate, as
-        estimated from the input phred scores.
-    """
-    if not scores:
-        return 0.0
-    sum_prob = 0.0
-    for val in scores:
-        sum_prob += LOOKUP[val]
-    mean_prob = sum_prob / len(scores)
-
-    return -10.0 * math.log10(mean_prob)
-
-
 def find_feature_qscores(feature, p_alignment, prefix_seq, prefix_qv):
     """
     Using the parasail alignment results, find the qscores corresponding to the
@@ -378,7 +361,7 @@ def find_feature_qscores(feature, p_alignment, prefix_seq, prefix_qv):
     feature_qv = prefix_qv[prefix_seq_feature_start:prefix_seq_feature_end]
     feature_qv_ascii = "".join(map(lambda x: chr(x + 33), feature_qv))
 
-    return feature_qv_ascii
+    return feature_qv_ascii, min(feature_qv)
 
 
 def align_adapter(tup):
@@ -453,8 +436,11 @@ def align_adapter(tup):
 
         # Require minimum read1 edit distance
         if adapter1_ed <= args.max_adapter1_ed:
-            qscores = find_feature_qscores(barcode, p_alignment, prefix_seq, prefix_qv)
-            chrom_barcode_counts[barcode] += 1
+            qscores, min_qv = find_feature_qscores(
+                barcode, p_alignment, prefix_seq, prefix_qv
+            )
+            if min_qv >= args.min_barcode_qv:
+                chrom_barcode_counts[barcode] += 1
 
             # Strip out insertions from alignment to get read barcode sequence
             barcode = barcode.replace("-", "")

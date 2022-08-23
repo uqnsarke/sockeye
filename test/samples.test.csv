@@ -1,4 +1,4 @@
-run_id,kit_name,kit_version,path
-test_5prime_5k,5prime,v1,5prime.5k.fastq.gz
-test_3prime_5k,3prime,v3,3prime.5k.fastq.gz
-test_multiome_5k,multiome,v1,multiome.5k.fastq.gz
+run_id,kit_name,kit_version,exp_cells,path
+test_5prime_5k,5prime,v1,500,5prime.5k.fastq.gz
+test_3prime_5k,3prime,v3,500,3prime.5k.fastq.gz
+test_multiome_5k,multiome,v1,500,multiome.5k.fastq.gz

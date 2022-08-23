@@ -35,6 +35,13 @@ def get_umi_length(w):
     return kit_df.loc[rows, "umi_length"].values[0]
 
 
+def get_expected_cells(w):
+    """
+    Get the expected cell count specified for this run_id.
+    """
+    return sample_sheet.loc[w.run_id, "exp_cells"]
+
+
 rule extract_barcodes:
     input:
         bam=BAM_SORT,
@@ -46,10 +53,9 @@ rule extract_barcodes:
         # barcodes=config["BC_LONGLIST"],
         kit=lambda w: sample_sheet.loc[w.run_id, "kit_name"],
         adapter1_suff_length=config["BARCODE_ADAPTER1_SUFF_LENGTH"],
+        barcode_min_qv=config["BARCODE_MIN_QUALITY"],
         barcode_length=lambda w: get_barcode_length(w),
         umi_length=lambda w: get_umi_length(w),
-        # barcode_length=config["READ_STRUCTURE_BARCODE_LENGTH"],
-        # umi_length=config["READ_STRUCTURE_UMI_LENGTH"],
     threads: config["MAX_THREADS"]
     conda:
         "../envs/barcodes.yml"
@@ -58,6 +64,7 @@ rule extract_barcodes:
         "-t {threads} "
         "--kit {params.kit} "
         "--adapter1_suff_length {params.adapter1_suff_length} "
+        "--min_barcode_qv {params.barcode_min_qv} "
         "--barcode_length {params.barcode_length} "
         "--umi_length {params.umi_length} "
         "--output_bam {output.bam} "
@@ -87,11 +94,13 @@ rule generate_whitelist:
         kneeplot=BARCODE_KNEEPLOT,
     params:
         flags=config["BARCODE_KNEEPLOT_FLAGS"],
+        exp_cells=lambda w: get_expected_cells(w),
     conda:
         "../envs/kneeplot.yml"
     shell:
         "python {SCRIPT_DIR}/knee_plot.py "
         "{params.flags} "
+        "--exp_cells {params.exp_cells} "
         "--output_whitelist {output.whitelist} "
         "--output_plot {output.kneeplot} "
         "{input}"
@@ -340,6 +349,7 @@ rule process_expression_matrix:
         tsv=MATRIX_COUNTS_TSV,
     output:
         tsv=MATRIX_PROCESSED_TSV,
+        mito=MATRIX_MITO_TSV,
     params:
         min_genes=config["MATRIX_MIN_GENES"],
         min_cells=config["MATRIX_MIN_CELLS"],
@@ -353,7 +363,9 @@ rule process_expression_matrix:
         "--min_cells {params.min_cells} "
         "--max_mito {params.max_mito} "
         "--norm_count {params.norm_count} "
-        "--output {output.tsv} {input.tsv}"
+        "--output {output.tsv} "
+        "--mito_output {output.mito} "
+        "{input.tsv}"
 
 
 rule umap_reduce_expression_matrix:
@@ -402,7 +414,7 @@ rule umap_plot_genes:
 rule umap_plot_mito_genes:
     input:
         umap=MATRIX_UMAP_TSV,
-        matrix=MATRIX_PROCESSED_TSV,
+        mito=MATRIX_MITO_TSV,
     output:
         plot=MATRIX_UMAP_PLOT_MITO,
     conda:
@@ -411,4 +423,4 @@ rule umap_plot_mito_genes:
         "python {SCRIPT_DIR}/plot_umap.py "
         "--mito_genes "
         "--output {output.plot} "
-        "{input.umap} {input.matrix}"
+        "{input.umap} {input.mito}"

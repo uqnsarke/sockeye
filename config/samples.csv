@@ -1,4 +1,4 @@
-run_id,kit_name,kit_version,path
-run1,3prime,v3,/PATH/TO/ONT/INPUT/READS1.fq.gz
-run2,3prime,v3,/PATH/TO/ONT/INPUT/READS2.fq.gz
-run3,5prime,v1,/PATH/TO/ONT/INPUT/RUN3/
+run_id,kit_name,kit_version,exp_cells,path
+run1,3prime,v3,500,/PATH/TO/ONT/INPUT/READS1.fq.gz
+run2,3prime,v3,500,/PATH/TO/ONT/INPUT/READS2.fq.gz
+run3,5prime,v1,500,/PATH/TO/ONT/INPUT/RUN3/

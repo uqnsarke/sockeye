@@ -28,10 +28,19 @@ def parse_args():
     # Optional arguments
     parser.add_argument(
         "--knee_method",
-        help="Method (distance/density) to use for calculating \
-                        knee position [distance]",
+        help="Method (quantile/distance/density) to use for calculating \
+                        knee position [quantile]",
         type=str,
-        default="distance",
+        default="quantile",
+    )
+
+    parser.add_argument(
+        "--exp_cells",
+        help="If using --knee_method=quantile, --exp_cells should be used to \
+                        set the expected number of cells based on the 10X \
+                        library. This value can be a very rough estimate [500]",
+        type=int,
+        default=500,
     )
 
     parser.add_argument(
@@ -105,6 +114,21 @@ def parse_args():
         )
 
     return args
+
+
+def getKneeQuantile(count_array):
+    """
+    Quantile-based method for thresholding the cell barcode whitelist using read counts.
+    This method is adapted from the following preprint:
+
+    Yupei You, Yair D.J. Prawer, Ricardo De Paoli-Iseppi, Cameron P.J. Hunt, Clare L.
+    Parish, Heejung Shim, Michael B. Clark. Identification of cell barcodes from long-
+    read single-cell RNA-seq with BLAZE. biorxiv. 2022.
+    doi: https://doi.org/10.1101/2022.08.16.504056
+    """
+    top_count = np.sort(count_array)[::-1][:args.exp_cells]
+    read_count_threshold = np.quantile(top_count, 0.95) / 20
+    return read_count_threshold
 
 
 def getKneeDistance(values):
@@ -254,6 +278,20 @@ def write_ont_barcodes(cutoff_ont_bcs, args):
         f.write("\n")
 
 
+def get_threshold_rank_index(read_count_threshold, ont_bc_sorted, args):
+    """
+    Find cell rank cutoff based on a specified read count threshold.
+    """
+    cutoff_ont_bcs = set(
+        [bc for bc, n in ont_bc_sorted.items() if n >= read_count_threshold]
+    )
+    idxOfBestPoint = len(cutoff_ont_bcs)
+    logger.info(
+        f"Writing {len(cutoff_ont_bcs)} cells with >= {read_count_threshold} reads to {args.output_whitelist}"
+    )
+    return cutoff_ont_bcs, idxOfBestPoint
+
+
 def make_kneeplot(ont_bc, ilmn_bc, conserved_bc, args):
     ont_bc_sorted = dict(
         sorted(ont_bc.items(), key=operator.itemgetter(1), reverse=True)
@@ -295,9 +333,14 @@ def make_kneeplot(ont_bc, ilmn_bc, conserved_bc, args):
     ymax = ax1.get_ylim()[1]
 
     # Calculate the knee index
+    ont_counts = list(ont_bc_sorted.values())
     if (args.cell_count is None) and (args.read_count_threshold is None):
-        if args.knee_method == "distance":
-            ont_counts = list(ont_bc_sorted.values())
+        if args.knee_method == "quantile":
+            read_count_threshold = getKneeQuantile(ont_counts)
+            cutoff_ont_bcs, idxOfBestPoint = get_threshold_rank_index(
+                read_count_threshold, ont_bc_sorted, args
+            )
+        elif args.knee_method == "distance":
             distToLine, idxOfBestPoint = getKneeDistance(ont_counts)
             cutoff_ont_bcs = apply_bc_cutoff(ont_bc_sorted, idxOfBestPoint)
         elif args.knee_method == "density":
@@ -306,7 +349,7 @@ def make_kneeplot(ont_bc, ilmn_bc, conserved_bc, args):
                 enumerate(ont_bc_sorted.values()), key=lambda x: abs(x[1] - threshold)
             )
         else:
-            print("Invalid value for --knee_method (distance, density)")
+            print("Invalid value for --knee_method (quantile, distance, density)")
             sys.exit()
         logger.info(
             f"Writing {len(cutoff_ont_bcs)} cells to {args.output_whitelist} based on the {args.knee_method} algorithm"
@@ -317,18 +360,14 @@ def make_kneeplot(ont_bc, ilmn_bc, conserved_bc, args):
         idxOfBestPoint = cell_count
         logger.info(f"Writing top {cell_count} cells to {args.output_whitelist}")
     elif args.read_count_threshold is not None:
-        cutoff_ont_bcs = set(
-            [bc for bc, n in ont_bc_sorted.items() if n >= args.read_count_threshold]
-        )
-        idxOfBestPoint = len(cutoff_ont_bcs)
-        logger.info(
-            f"Writing {len(cutoff_ont_bcs)} cells with >= {args.read_count_threshold} reads to {args.output_whitelist}"
+        cutoff_ont_bcs, idxOfBestPoint = get_threshold_rank_index(
+            args.read_count_threshold, ont_bc_sorted, args
         )
 
     write_ont_barcodes(cutoff_ont_bcs, args)
 
     ax1.vlines(idxOfBestPoint, ymin=1, ymax=ymax, linestyle="--", color="k")
-    ax1.set_title("Found {} cells using ONT barcodes".format(idxOfBestPoint))
+    ax1.set_title("Found {} cells using ONT barcodes".format(idxOfBestPoint + 1))
 
     if args.ilmn_barcodes is not None:
         pct_ilmn_in_ont = 100 * len(cutoff_ont_bcs & ilmn_bc) / len(ilmn_bc)
