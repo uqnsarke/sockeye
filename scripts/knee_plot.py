@@ -35,6 +35,15 @@ def parse_args():
     )
 
     parser.add_argument(
+        "--exp_cells",
+        help="If using --knee_method=quantile, --exp_cells should be used to \
+                        set the expected number of cells based on the 10X \
+                        library. This value can be a very rough estimate [500]",
+        type=int,
+        default=500,
+    )
+
+    parser.add_argument(
         "--cell_count",
         help="Instead of empirically setting the cell count \
                         threshold from the knee plot using distance or density \
@@ -108,9 +117,16 @@ def parse_args():
 
 
 def getKneeQuantile(count_array):
-    """ """
-    exp_cells = 500
-    top_count = np.sort(count_array)[::-1][:exp_cells]
+    """
+    Quantile-based method for thresholding the cell barcode whitelist using read counts.
+    This method is adapted from the following preprint:
+
+    Yupei You, Yair D.J. Prawer, Ricardo De Paoli-Iseppi, Cameron P.J. Hunt, Clare L.
+    Parish, Heejung Shim, Michael B. Clark. Identification of cell barcodes from long-
+    read single-cell RNA-seq with BLAZE. biorxiv. 2022.
+    doi: https://doi.org/10.1101/2022.08.16.504056
+    """
+    top_count = np.sort(count_array)[::-1][:args.exp_cells]
     read_count_threshold = np.quantile(top_count, 0.95) / 20
     return read_count_threshold
 

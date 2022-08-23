@@ -35,6 +35,13 @@ def get_umi_length(w):
     return kit_df.loc[rows, "umi_length"].values[0]
 
 
+def get_expected_cells(w):
+    """
+    Get the expected cell count specified for this run_id.
+    """
+    return sample_sheet.loc[w.run_id, "exp_cells"]
+
+
 rule extract_barcodes:
     input:
         bam=BAM_SORT,
@@ -87,11 +94,13 @@ rule generate_whitelist:
         kneeplot=BARCODE_KNEEPLOT,
     params:
         flags=config["BARCODE_KNEEPLOT_FLAGS"],
+        exp_cells=lambda w: get_expected_cells(w),
     conda:
         "../envs/kneeplot.yml"
     shell:
         "python {SCRIPT_DIR}/knee_plot.py "
         "{params.flags} "
+        "--exp_cells {params.exp_cells} "
         "--output_whitelist {output.whitelist} "
         "--output_plot {output.kneeplot} "
         "{input}"
