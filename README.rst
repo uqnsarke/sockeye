@@ -5,6 +5,10 @@
 
 ******************
 
+**This repository is now deprecated, please see https://github.com/epi2me-labs/wf-single-cell**
+
+
+
 Sockeye
 """""""""
 
