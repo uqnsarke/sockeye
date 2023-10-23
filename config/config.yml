@@ -15,7 +15,7 @@ OUTPUT_BASE: /PATH/TO/DESIRED/OUTPUT/DIR
 ######### REF_GENOME_DIR #########
 # REF_GENOME_DIR refers the path to reference directory as downloaded from 10x,
 # e.g. /FULL/PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
-REF_GENOME_DIR: /FULL/PATH/TO/10X/DOWNLOADS/refdata-gex-GRCh38-2020-A
+REF_GENOME_DIR: /data/sarkern2/Nanopore/refdata-gex-GRCh38-2020-A 
 
 MAX_THREADS: 24
 
